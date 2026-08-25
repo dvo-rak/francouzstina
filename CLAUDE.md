@@ -5,8 +5,8 @@ tohle repo udržovat v nové konverzaci bez historie.
 
 ## Co to je
 
-Webová appka na procvičování francouzštiny pro Antonínovu přítelkyni
-(úrovně A1–B2, není technická, používá hlavně mobil). Běží na GitHub
+Webová appka na procvičování francouzštiny pro jednu konkrétní uživatelku
+(úrovně A1–B2, používá hlavně mobil). Běží na GitHub
 Pages: https://dvo-rak.github.io/francouzstina/ — statická, bez buildu, bez
 backendu, vše v localStorage. UI česky, obsah francouzsky.
 
@@ -16,7 +16,7 @@ backendu, vše v localStorage. UI česky, obsah francouzsky.
    ```
    git clone https://x-access-token:<TOKEN>@github.com/dvo-rak/francouzstina.git
    ```
-   Token pošle Antonín ve zprávě (fine-grained, jen toto repo, Contents RW).
+   Token pošle uživatel ve zprávě (fine-grained, jen toto repo, Contents RW).
    Pokud ho nedal, řekni si o něj. Nikam si ho neukládej.
 2. Udělej změny, **otestuj** (viz Validace níže).
 3. **Nasazuj výhradně přes `./deploy.sh "message"`** — razítkuje verzi
@@ -24,8 +24,8 @@ backendu, vše v localStorage. UI česky, obsah francouzsky.
    a pushne. Nikdy ne holé `git push`, verze by se rozjela s realitou.
 4. Git identita: `git config user.name "Claude" && git config user.email "noreply@anthropic.com"`.
 
-Antonín je senior sysadmin — komunikuj česky, technicky, stručně, bez
-vaty. Chyby přiznej rovnou. Přítelkyni se říká „QA".
+Uživatel je senior sysadmin — komunikuj česky, technicky, stručně, bez
+vaty. Chyby přiznej rovnou. Cílové uživatelce appky se říká „QA".
 
 ## Struktura
 
