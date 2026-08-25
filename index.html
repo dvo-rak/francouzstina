@@ -264,7 +264,7 @@
 <script>
 "use strict";
 
-const APP_VERSION = "17 (2026-08-25)";
+const APP_VERSION = "18 (2026-08-25)";
 
 // ── Skládání tvarů ──────────────────────────────────────────
 const PRONOUNS = ["je", "tu", "il", "nous", "vous", "ils"];
@@ -357,6 +357,21 @@ function frNumber(n) {
   return NUM_TENS[t] + "-" + NUM_UNITS[u];
 }
 
+// švýcarská (romandská) varianta: septante / huitante / nonante
+const CH_TENS = { 70: "septante", 80: "huitante", 90: "nonante" };
+function chNumber(n) {
+  if (n < 70 || n === 100) return frNumber(n);
+  const t = Math.floor(n / 10) * 10, u = n % 10;
+  if (u === 0) return CH_TENS[t];
+  if (u === 1) return CH_TENS[t] + " et un";
+  return CH_TENS[t] + "-" + NUM_UNITS[u];
+}
+// číslo v aktuálním stylu
+const numWord = (n) => (state.numStyle === "ch" ? chNumber(n) : frNumber(n));
+// přijímané zápisy: ve švýcarském stylu projde i francouzská forma
+// (v Ženevě se pro 80 běžně říká quatre-vingts) a naopak
+const numAccepted = (n) => [...new Set([numWord(n), frNumber(n), chNumber(n)])];
+
 // ── Pomocné ─────────────────────────────────────────────────
 const rnd = (n) => Math.floor(Math.random() * n);
 const pick = (arr) => arr[rnd(arr.length)];
@@ -375,6 +390,7 @@ const MODE_LABEL = {
   mix: "Mix", conj: "Časování", frcz: "FR → ČJ", czfr: "ČJ → FR",
   sent: "PC × Imparfait", num: "Čísla", gen: "Rody", cete: "Čtení",
   gram: "Gramatika", dict: "Diktát", due: "Opakování", errs: "Moje chyby",
+  swiss: "Švýcarská fr.",
 };
 const GRP_LABEL = { all: "všechna", irr: "nepravidelná", reg: "pravidelná" };
 const LENGTHS = [
@@ -543,6 +559,7 @@ const DEFAULT_SETTINGS = {
   sound: false,
   goal: 20, // denní cíl (počet otázek)
   vocabSrc: "all", // all | verbs | themes
+  numStyle: "fr", // fr (Francie) | ch (Švýcarsko: septante/huitante/nonante)
 };
 const state = {
   screen: "menu", // menu | quiz | done | stats
@@ -575,7 +592,7 @@ function saveSettings() {
   saveJSON(SETTINGS_KEY, {
     level: state.level, tenseIds: state.tenseIds, grp: state.grp,
     sessionLen: state.sessionLen, ans: state.ans, smart: state.smart, sound: state.sound,
-    goal: state.goal, vocabSrc: state.vocabSrc,
+    goal: state.goal, vocabSrc: state.vocabSrc, numStyle: state.numStyle,
   });
 }
 
@@ -673,16 +690,16 @@ function numOptions(n) {
 }
 
 function buildNum(n) {
-  const word = frNumber(n);
+  const word = numWord(n);
   const q = {
     key: "num|" + n, statId: "n|" + Math.floor(n / 10) * 10,
     prompt: "Jak se řekne francouzsky…",
-    big: String(n), sub: "",
+    big: String(n), sub: state.numStyle === "ch" ? "švýcarská varianta" : "",
     correct: word,
     sayAfter: state.sound ? word : null,
   };
-  if (state.ans === "text") { q.answerType = "text"; q.accepted = [word]; }
-  else { q.answerType = "choice"; q.options = shuffle(numOptions(n).map(frNumber)); }
+  if (state.ans === "text") { q.answerType = "text"; q.accepted = numAccepted(n); }
+  else { q.answerType = "choice"; q.options = shuffle(numOptions(n).map(numWord)); }
   return q;
 }
 
@@ -690,12 +707,59 @@ function buildNumListen(n) {
   const q = {
     key: "numL|" + n, statId: "n|" + Math.floor(n / 10) * 10,
     prompt: "Poslouchej a napiš číslo",
-    big: "🔊", audio: frNumber(n), sub: "klikni na 🔊 pro přehrání",
+    big: "🔊", audio: numWord(n), sub: "klikni na 🔊 pro přehrání",
     correct: String(n),
   };
   if (state.ans === "text") { q.answerType = "text"; q.accepted = [String(n)]; q.inputMode = "numeric"; }
   else { q.answerType = "choice"; q.options = shuffle(numOptions(n).map(String)); }
   return q;
+}
+
+function buildSwiss(si) {
+  const s = SWISS[si];
+  // distraktory: nejdřív ze stejné kategorie, pak odkudkoli;
+  // deduplikace podle zobrazené hodnoty (různá slova mají někdy
+  // stejný překlad — cornet i poche = „le sac“)
+  const field = Math.random() < 0.6 ? "fr" : "ch";
+  const pickDistractors = (val) => {
+    const seen = new Set([val]);
+    const out = [];
+    for (const list of [SWISS.filter((x, i) => i !== si && x.cat === s.cat), SWISS.filter((x, i) => i !== si)]) {
+      for (const x of shuffle(list)) {
+        if (out.length >= 3) break;
+        if (seen.has(x[field])) continue;
+        seen.add(x[field]);
+        out.push(x[field]);
+      }
+      if (out.length >= 3) break;
+    }
+    return out;
+  };
+
+  if (field === "fr") {
+    return {
+      key: "sw|" + si + "|f", statId: "sw|" + si,
+      prompt: "🇨🇭 Co se ve Francii řekne jinak?",
+      big: s.ch, bigClass: s.ch.length > 20 ? "sentence" : "",
+      sub: s.cz + " · " + s.cat,
+      correct: s.fr,
+      answerType: "choice",
+      options: shuffle([s.fr, ...pickDistractors(s.fr)]),
+      why: s.note || null,
+      sayAfter: state.sound ? s.ch : null,
+    };
+  }
+  return {
+    key: "sw|" + si + "|c", statId: "sw|" + si,
+    prompt: "Jak se to řekne ve Švýcarsku?",
+    big: s.fr, bigClass: s.fr.length > 20 ? "sentence" : "",
+    sub: s.cz + " · " + s.cat,
+    correct: s.ch,
+    answerType: "choice",
+    options: shuffle([s.ch, ...pickDistractors(s.ch)]),
+    why: s.note || null,
+    sayAfter: state.sound ? s.ch : null,
+  };
 }
 
 function buildGen(noun) {
@@ -785,6 +849,7 @@ function questionFromStatId(id) {
     const noun = NOUNS.find((x) => x.n === p[1]);
     return noun ? buildGen(noun) : null;
   }
+  if (p[0] === "sw") return SWISS[Number(p[1])] ? buildSwiss(Number(p[1])) : null;
   if (p[0] === "s") return SENTENCES[Number(p[1])] ? buildSent(Number(p[1])) : null;
   if (p[0] === "gr") return GRAMMAR[Number(p[1])] ? buildGram(Number(p[1])) : null;
   if (p[0] === "d") return DICT[Number(p[1])] ? buildDict(Number(p[1])) : null;
@@ -859,6 +924,15 @@ function makeQuestion() {
       const n = sampleWeighted(cands, (x) => "n|" + Math.floor(x / 10) * 10);
       const listening = state.sound && TTS_OK && Math.random() < 0.5;
       const q = listening ? buildNumListen(n) : buildNum(n);
+      if (q.key === prevKey) continue;
+      return q;
+    }
+
+    if (mode === "swiss") {
+      const idxs = idxPool(SWISS, "sw|");
+      const cands = Array.from({ length: K }, () => pick(idxs));
+      const si = sampleWeighted(cands, (i) => "sw|" + i);
+      const q = buildSwiss(si);
       if (q.key === prevKey) continue;
       return q;
     }
@@ -1091,6 +1165,11 @@ function renderMenu() {
       [{ id: "all", label: "Vše" }, { id: "verbs", label: "Jen slovesa" }, { id: "themes", label: "Jen témata" }],
       (v) => state.vocabSrc === v.id, "vocab-src"
     ) +
+    '<div style="height:14px"></div><span class="label">Čísla 70–99</span>' +
+    chipRow(
+      [{ id: "fr", label: "🇫🇷 soixante-dix" }, { id: "ch", label: "🇨🇭 septante" }],
+      (s) => state.numStyle === s.id, "num-style"
+    ) +
     '<div style="height:14px"></div><span class="label">Další volby</span>' +
     chipRow(
       [
@@ -1132,6 +1211,7 @@ function renderMenu() {
     '<button class="modeBtn" data-action="start" data-id="num">Čísla 0–100<small>42 → quarante-deux' + (TTS_OK ? " (se zvukem i poslech)" : "") + "</small></button>" +
     '<button class="modeBtn" data-action="start" data-id="gen">Rody: un / une<small>… problème? un!</small></button>' +
     (TTS_OK ? '<button class="modeBtn" data-action="start" data-id="dict">Diktát (dictée)<small>poslouchej větu a napiš ji</small></button>' : "") +
+    '<button class="modeBtn" data-action="start" data-id="swiss">🇨🇭 Švýcarská francouzština<small>natel, cornet, septante… a zrádné názvy jídel</small></button>' +
     '<button class="modeBtn" data-action="show-stats">📊 Statistiky chyb<small>co jde nejhůř a co procvičit</small></button>' +
     '<button class="modeBtn" data-action="show-help">ℹ️ Nápověda<small>co dělají režimy a nastavení</small></button>';
 
@@ -1238,7 +1318,7 @@ function renderQuiz() {
       html += '<p class="correction">→ ' + esc(q.correct) + "</p>";
     }
     if (q.why) html += '<p class="why">' + esc(q.why) + "</p>";
-    if (/^(s|gr|d)\|/.test(q.statId || "")) {
+    if (/^(s|gr|d|sw)\|/.test(q.statId || "")) {
       html += '<button class="hideLink" data-action="hide-item" data-id="' + esc(q.statId) + '">🚫 tuhle položku už nedávat</button>';
     }
     const last = state.mode === "cete"
@@ -1318,6 +1398,8 @@ function renderStats() {
     statRows(Object.entries(aggStats("g|")), (k) => esc(k), 8, (k) => "g|" + k) + "</div>";
   html += '<div class="card"><span class="label">PC × imparfait (věty)</span>' +
     statRows(Object.entries(aggStats("s|")), (k) => esc((SENTENCES[Number(k)] || {}).s || "věta " + k), 5, (k) => "s|" + k) + "</div>";
+  html += '<div class="card"><span class="label">Švýcarská francouzština</span>' +
+    statRows(Object.entries(aggStats("sw|")), (k) => esc((SWISS[Number(k)] || {}).ch || "položka " + k), 8, (k) => "sw|" + k) + "</div>";
   html += '<div class="card"><span class="label">Gramatika</span>' +
     statRows(Object.entries(aggStats("gr|")), (k) => esc((GRAMMAR[Number(k)] || {}).s || "položka " + k), 8, (k) => "gr|" + k) + "</div>";
   html += '<div class="card"><span class="label">Diktáty</span>' +
@@ -1334,6 +1416,7 @@ function renderStats() {
       if (p[0] === "s") return (SENTENCES[i] || {}).s || id;
       if (p[0] === "gr") return (GRAMMAR[i] || {}).s || id;
       if (p[0] === "d") return (DICT[i] || {}).s || id;
+      if (p[0] === "sw") return (SWISS[i] || {}).ch || id;
       return id;
     };
     html += '<div class="card"><div class="histHead"><span class="label">Vyřazené položky (' + state.hidden.length + ')</span>' +
@@ -1417,12 +1500,14 @@ function renderHelp() {
     '<p><b>Porozumění textu (DELF)</b> — krátký text (e-mail, inzerát, článek…) a otázky francouzsky, jako u zkoušky. Text zůstává během otázek nahoře. Nabízejí se texty do tvé úrovně včetně (na B2 tedy i A1–B1 — nižší úroveň textu neuškodí).</p>' +
     '<p><b>Čísla 0–100</b> — číslo vybereš/napíšeš francouzsky. Se zapnutým zvukem je půlka otázek poslechová: slyšíš číslo a píšeš číslice.</p>' +
     '<p><b>Rody: un / une</b> — tipuješ rod podstatného jména. Vybraná jsou hlavně zrádná slova (<i>le problème, le musée, l\'eau — f!, le bonheur…</i>).</p>' +
+    '<p><b>🇨🇭 Švýcarská francouzština</b> — rozdíly mezi francouzskou a švýcarskou (romandskou) francouzštinou: slovíčka (<i>natel</i>, <i>cornet</i>, <i>panosse</i>, <i>bancomat</i>), úřední a školní pojmy (<i>votation</i>, <i>maturité</i>, <i>action</i> = sleva), výrazy (<i>ça joue</i>, <i>tout de bon</i>) a hlavně <b>zrádné názvy jídel</b>: švýcarský <i>déjeuner</i> je snídaně, <i>dîner</i> je oběd a <i>souper</i> večeře — o jedno posunuté oproti Francii. Otázky chodí oběma směry a u záludností je česká poznámka.</p>' +
     '</div>' +
 
     '<div class="card helpCard"><span class="label">Nastavení</span>' +
     '<p><b>Slovesa</b> — všechna / jen nepravidelná / jen pravidelná (platí pro časování i slovíčka).</p>' +
     '<p><b>Časy</b> — zapni/vypni jednotlivé časy pro časování. Imparfait, futur simple, conditionnel a subjonctif si přidej, až na ně dojde v kurzu.</p>' +
     '<p><b>Počet otázek</b> — délka jednoho kola; u ∞ cvičíš, dokud nedáš „← ukončit“. U čtení je kolo vždy jeden text s otázkami.</p>' +
+    '<p><b>Čísla 70–99</b> — přepínač stylu: francouzsky (<i>soixante-dix, quatre-vingts, quatre-vingt-dix</i>) nebo švýcarsky (<i>septante, huitante, nonante</i>). Pozn.: <i>septante</i> a <i>nonante</i> se používají v celé Romandii včetně Ženevy, ale <i>huitante</i> jen ve Vaud, Valais a Fribourgu — v Ženevě se pro 80 říká <i>quatre-vingts</i>. Při psaní se proto uznají obě varianty.</p>' +
     '<p><b>Denní cíl a série 🔥</b> — kolik otázek denně chceš stihnout. Nahoře v menu vidíš dnešní počet, sérii dní se splněným cílem a mřížku posledních 28 dní (modrá = něco, zelená = cíl splněn).</p>' +
     '<p><b>✍ psaní odpovědí</b> — místo výběru ze 4 možností odpověď píšeš. Těžší, ale blíž zkoušce. Kontrola je tolerantní: chybějící háčky a čárky (<i>etais</i> místo <i>étais</i>) se počítají jako správně, jen s upozorněním „pozor na akcenty“; u čísel je jedno, jestli píšeš pomlčky, nebo mezery.</p>' +
     '<p><b>🧠 chytré opakování</b> — appka si (jen v tomhle prohlížeči) počítá, kde děláš chyby, a tyhle věci ti pak nabízí <b>častěji</b>. Nic víc v tom není — žádné plánování na dny dopředu, prostě „co ti nejde, chodí častěji“. Vypnuté = čistě náhodný výběr.</p>' +
@@ -1460,6 +1545,7 @@ app.addEventListener("click", (e) => {
   else if (action === "len") { state.sessionLen = Number(id); saveSettings(); render(); }
   else if (action === "goal") { state.goal = Number(id); saveSettings(); render(); }
   else if (action === "vocab-src") { state.vocabSrc = id; saveSettings(); render(); }
+  else if (action === "num-style") { state.numStyle = id; saveSettings(); render(); }
   else if (action === "level") {
     state.level = id;
     state.tenseIds = tensePreset(id);

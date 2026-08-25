@@ -55,6 +55,13 @@ vaty. Chyby přiznej rovnou. Cílové uživatelce appky se říká „QA".
   - `VOCAB` — tematická slovíčka: `{fr, cz, lvl, th (téma česky)}`; `fr` unikátní
     napříč VOCAB (statId je `v|fr`, sdílený se slovesy). Distraktory se berou
     přednostně ze stejného tématu.
+  - `SWISS` — helvétismes: `{ch, fr, cz, cat, note?}`; režim `swiss`, statId
+    `sw|i`, bez úrovní (rozdíly jsou praktické, ne úrovňové). POZOR na fakta:
+    septante/nonante platí v celé Romandii včetně Ženevy, ale huitante jen
+    Vaud/Valais/Fribourg — v Ženevě je pro 80 quatre-vingts. Jídla jsou
+    posunutá: CH déjeuner=snídaně, dîner=oběd, souper=večeře.
+    Distraktory se dedupují podle zobrazené hodnoty (různé položky mají
+    někdy stejný překlad — cornet i poche = „le sac“).
   - `SENTENCES` — věty PC×imparfait: `{s (s ___), inf, p (0–5), t: "imp"|"pc", why}`.
     POZOR: obě varianty (imp i pc tvar) musí gramaticky pasovat do mezery —
     žádné „je ___", kde by tvar začínal samohláskou (elize j').
@@ -65,6 +72,13 @@ vaty. Chyby přiznej rovnou. Cílové uživatelce appky se říká „QA".
 - `README.md` — jen úvod + sekce pro správce. Uživatelská nápověda žije
   VÝHRADNĚ v appce (`renderHelp()` v index.html) — README ji záměrně
   neduplikuje, aby nebylo co zapomenout synchronizovat.
+
+## Čísla (index.html)
+
+`frNumber()` = francouzská forma, `chNumber()` = romandská
+(septante/huitante/nonante, jinak deleguje na frNumber). Přepínač
+`state.numStyle` ("fr"|"ch") vybírá přes `numWord()`; při psaní
+`numAccepted()` uznává obě formy (kvůli ženevskému quatre-vingts).
 
 ## SRS, fronty a streak (index.html)
 

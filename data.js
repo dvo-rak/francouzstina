@@ -1648,3 +1648,61 @@ const VOCAB = [
   { fr: "connaissance", cz: "znalost", lvl: "B2", th: "abstrakta" },
   { fr: "objectif", cz: "cíl", lvl: "B2", th: "abstrakta" },
 ];
+
+// ─────────────────────────────────────────────────────────────
+// Švýcarská francouzština (helvétismes)
+// {ch: švýcarsky, fr: standardní francouzsky, cz: česky,
+//  cat: kategorie, note?: české upřesnění}
+// Pozor u čísel: septante/nonante platí v celé Romandii včetně
+// Ženevy; huitante jen ve Vaud/Valais/Fribourg — v Ženevě se
+// pro 80 běžně říká quatre-vingts.
+// ─────────────────────────────────────────────────────────────
+const SWISS = [
+  // ── čísla ──
+  { ch: "septante", fr: "soixante-dix", cz: "70", cat: "čísla" },
+  { ch: "huitante", fr: "quatre-vingts", cz: "80", cat: "čísla", note: "Vaud, Valais, Fribourg — v Ženevě se říká quatre-vingts jako ve Francii." },
+  { ch: "nonante", fr: "quatre-vingt-dix", cz: "90", cat: "čísla" },
+  { ch: "septante-cinq", fr: "soixante-quinze", cz: "75", cat: "čísla" },
+  { ch: "nonante-neuf", fr: "quatre-vingt-dix-neuf", cz: "99", cat: "čísla" },
+  // ── jídla (nejzrádnější rozdíl!) ──
+  { ch: "le déjeuner", fr: "le petit-déjeuner", cz: "snídaně", cat: "jídla", note: "Ve Švýcarsku je déjeuner SNÍDANĚ, ve Francii oběd — klasický zdroj nedorozumění." },
+  { ch: "le dîner", fr: "le déjeuner", cz: "oběd", cat: "jídla", note: "Švýcarský dîner = oběd; francouzský dîner = večeře." },
+  { ch: "le souper", fr: "le dîner", cz: "večeře", cat: "jídla" },
+  // ── každodenní slova ──
+  { ch: "le natel", fr: "le portable", cz: "mobil", cat: "věci", note: "Ze značky Nationales Autotelefonnetz." },
+  { ch: "le cornet", fr: "le sac (en plastique)", cz: "sáček, taška", cat: "věci", note: "Ve Francii cornet = kornout (na zmrzlinu)." },
+  { ch: "la poche", fr: "le sac (en plastique)", cz: "sáček", cat: "věci" },
+  { ch: "le bancomat", fr: "le distributeur (de billets)", cz: "bankomat", cat: "věci" },
+  { ch: "la panosse", fr: "la serpillière", cz: "hadr na podlahu", cat: "věci" },
+  { ch: "la patte", fr: "le chiffon", cz: "hadr", cat: "věci" },
+  { ch: "le linge", fr: "la serviette (de bain)", cz: "ručník", cat: "věci" },
+  { ch: "le foehn", fr: "le sèche-cheveux", cz: "fén", cat: "věci", note: "Také jméno teplého alpského větru." },
+  { ch: "la jaquette", fr: "le gilet, la veste", cz: "svetr na knoflíky, sako", cat: "věci" },
+  { ch: "le cheni", fr: "le désordre", cz: "nepořádek, binec", cat: "věci" },
+  { ch: "le thé froid", fr: "le thé glacé", cz: "ledový čaj", cat: "věci" },
+  // ── slovesa a činnosti ──
+  { ch: "poutzer", fr: "nettoyer", cz: "uklízet", cat: "slovesa", note: "Z německého putzen." },
+  { ch: "foehner", fr: "sécher au sèche-cheveux", cz: "vysoušet fénem", cat: "slovesa" },
+  { ch: "s'encoubler", fr: "trébucher", cz: "zakopnout", cat: "slovesa" },
+  { ch: "courber un cours", fr: "sécher un cours", cz: "ulít se z hodiny", cat: "slovesa" },
+  { ch: "bringuer", fr: "insister lourdement", fr2: null, cz: "otravovat, dotírat", cat: "slovesa" },
+  // ── úřady, škola, práce ──
+  { ch: "le syndic", fr: "le maire", cz: "starosta", cat: "úřady", note: "Ve Vaud a Fribourgu; v Ženevě „le maire“." },
+  { ch: "la votation", fr: "le référendum, le vote", cz: "hlasování, referendum", cat: "úřady" },
+  { ch: "la maturité", fr: "le baccalauréat", cz: "maturita", cat: "úřady" },
+  { ch: "le gymnase", fr: "le lycée", cz: "gymnázium", cat: "úřady", note: "Ve Vaud; jinde „le collège“." },
+  { ch: "l'action", fr: "la promotion", cz: "akce, sleva", cat: "úřady", note: "Z německého Aktion — v obchodě „en action“ = ve slevě." },
+  { ch: "la place de parc", fr: "la place de stationnement", cz: "parkovací místo", cat: "úřady" },
+  { ch: "le logopédiste", fr: "l'orthophoniste", cz: "logoped", cat: "úřady" },
+  { ch: "le physiothérapeute", fr: "le kinésithérapeute", cz: "fyzioterapeut", cat: "úřady" },
+  { ch: "l'écolage", fr: "les frais de scolarité", cz: "školné", cat: "úřady" },
+  // ── výrazy ──
+  { ch: "Ça joue ?", fr: "Ça marche ? Ça va ?", cz: "Klape to? Jde to?", cat: "výrazy" },
+  { ch: "Ça joue !", fr: "D'accord, ça marche !", cz: "Platí! Dobře!", cat: "výrazy" },
+  { ch: "Tout de bon !", fr: "Bonne continuation !", cz: "Ať se daří!", cat: "výrazy" },
+  { ch: "Fais seulement !", fr: "Vas-y, je t'en prie !", cz: "Jen do toho, poslužte si!", cat: "výrazy" },
+  { ch: "C'est bonnard !", fr: "C'est super !", cz: "To je super!", cat: "výrazy" },
+  { ch: "avoir meilleur temps de", fr: "avoir intérêt à", cz: "být lepší (něco udělat)", cat: "výrazy" },
+  { ch: "la verrée", fr: "le pot, l'apéritif", cz: "přípitek, sklenka (na oslavu)", cat: "výrazy" },
+  { ch: "être sur le bidon", fr: "être en pause", cz: "mít pauzu", cat: "výrazy" },
+];
