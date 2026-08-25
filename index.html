@@ -211,6 +211,8 @@
   .statVal.lo { color: #b8302f; }
   .statEmpty { color: #8391ad; font-size: 0.92rem; margin: 8px 0 0; }
   .statNote { color: #8391ad; font-size: 0.85rem; margin-top: 12px; }
+  .helpCard p { font-size: 0.94rem; line-height: 1.55; margin: 10px 0 0; }
+  .helpCard p:first-of-type { margin-top: 12px; }
   .knowBtn {
     background: #fff; border: 1.5px solid #b9c6de; border-radius: 999px;
     color: #2e7d4f; font-family: inherit; font-size: 0.78rem;
@@ -827,7 +829,8 @@ function renderMenu() {
     '<button class="modeBtn" data-action="start" data-id="cete">Porozumění textu (DELF)<small>přečti text a odpověz na otázky · ' + TEXTS.length + " textů</small></button>" +
     '<button class="modeBtn" data-action="start" data-id="num">Čísla 0–100<small>42 → quarante-deux' + (TTS_OK ? " (se zvukem i poslech)" : "") + "</small></button>" +
     '<button class="modeBtn" data-action="start" data-id="gen">Rody: un / une<small>… problème? un!</small></button>' +
-    '<button class="modeBtn" data-action="show-stats">📊 Statistiky chyb<small>co jde nejhůř a co procvičit</small></button>';
+    '<button class="modeBtn" data-action="show-stats">📊 Statistiky chyb<small>co jde nejhůř a co procvičit</small></button>' +
+    '<button class="modeBtn" data-action="show-help">ℹ️ Nápověda<small>co dělají režimy a nastavení</small></button>';
 
   if (state.history.length > 0) {
     html += '<div class="card"><div class="histHead"><span class="label">Historie</span>' +
@@ -996,10 +999,44 @@ function renderStats() {
   return html;
 }
 
+function renderHelp() {
+  return '<div class="topbar"><button class="back" data-action="menu">← menu</button></div>' +
+    '<h1 class="title">Nápověda</h1>' +
+    '<p class="subtitle">co dělají jednotlivé režimy a volby</p>' +
+
+    '<div class="card helpCard"><span class="label">Režimy</span>' +
+    '<p><b>Časování</b> — sloveso, osoba a čas; vybereš (nebo napíšeš) správný tvar. Které časy se procvičují, si zvolíš v nastavení.</p>' +
+    '<p><b>Passé composé × imparfait</b> — věta s mezerou, vybíráš mezi dvěma tvary. Po odpovědi se ukáže, <i>proč</i> je správně zrovna tenhle čas (signální slova jako <i>tous les étés</i>, <i>soudain</i>, <i>d\'habitude</i>…).</p>' +
+    '<p><b>Slovíčka</b> — překlad sloves oběma směry.</p>' +
+    '<p><b>Porozumění textu (DELF)</b> — krátký text (e-mail, inzerát, článek…) a 5 otázek francouzsky, jako u zkoušky. Text zůstává během otázek nahoře. Úroveň B1/B2 jde filtrovat v nastavení.</p>' +
+    '<p><b>Čísla 0–100</b> — číslo vybereš/napíšeš francouzsky. Se zapnutým zvukem je půlka otázek poslechová: slyšíš číslo a píšeš číslice.</p>' +
+    '<p><b>Rody: un / une</b> — tipuješ rod podstatného jména. Vybraná jsou hlavně zrádná slova (<i>le problème, le musée, l\'eau — f!, le bonheur…</i>).</p>' +
+    '</div>' +
+
+    '<div class="card helpCard"><span class="label">Nastavení</span>' +
+    '<p><b>Slovesa</b> — všechna / jen nepravidelná / jen pravidelná (platí pro časování i slovíčka).</p>' +
+    '<p><b>Časy</b> — zapni/vypni jednotlivé časy pro časování. Imparfait, futur simple, conditionnel a subjonctif si přidej, až na ně dojde v kurzu.</p>' +
+    '<p><b>Počet otázek</b> — délka jednoho kola; u ∞ cvičíš, dokud nedáš „← ukončit“. U čtení je kolo vždy jeden text s 5 otázkami.</p>' +
+    '<p><b>✍ psaní odpovědí</b> — místo výběru ze 4 možností odpověď píšeš. Těžší, ale blíž zkoušce. Kontrola je tolerantní: chybějící háčky a čárky (<i>etais</i> místo <i>étais</i>) se počítají jako správně, jen s upozorněním „pozor na akcenty“; u čísel je jedno, jestli píšeš pomlčky, nebo mezery.</p>' +
+    '<p><b>🧠 chytré opakování</b> — appka si (jen v tomhle prohlížeči) počítá, kde děláš chyby, a tyhle věci ti pak nabízí <b>častěji</b>. Nic víc v tom není — žádné plánování na dny dopředu, prostě „co ti nejde, chodí častěji“. Vypnuté = čistě náhodný výběr.</p>' +
+    '<p><b>🔊 zvuk</b> — francouzské předčítání hlasem prohlížeče: slovíčka, čísla (i poslechové otázky), po odpovědi věty a <i>un/une + slovo</i>, u textů tlačítko „přečíst“. Pokud slyšíš angličtinu, chybí v zařízení francouzský hlas — na iPhonu: Nastavení → Zpřístupnění → Předčítání obsahu → Hlasy → Francouzština; na Androidu: nastavení Google TTS.</p>' +
+    '</div>' +
+
+    '<div class="card helpCard"><span class="label">📊 Statistiky a „✓ umím“</span>' +
+    '<p>Statistiky ukazují, co ti jde nejhůř — nejtěžší slovesa, časy, slovíčka, čísla, rody, věty i texty. Přesně z nich čerpá chytré opakování.</p>' +
+    '<p>Tlačítko <b>„✓ umím“</b> vynuluje počítadlo dané položky: zmizí ze seznamu a přestane se ti podsouvat častěji. Není to napořád — když v ní zase uděláš chybu, objeví se tu znovu. Klidně mačkej, nic si tím nerozbiješ.</p>' +
+    '</div>' +
+
+    '<div class="card helpCard"><span class="label">Soukromí a data</span>' +
+    '<p>Všechno (historie, statistiky, nastavení) se ukládá jen v prohlížeči — nikam se nic neposílá, žádný účet. Druhá strana mince: data jsou vázaná na konkrétní zařízení a prohlížeč; telefon a notebook mají každý svoje, a smazání dat prohlížeče je smaže taky.</p>' +
+    '</div>';
+}
+
 function render() {
   if (state.screen === "menu") app.innerHTML = renderMenu();
   else if (state.screen === "quiz") app.innerHTML = renderQuiz();
   else if (state.screen === "stats") app.innerHTML = renderStats();
+  else if (state.screen === "help") app.innerHTML = renderHelp();
   else app.innerHTML = renderDone();
   const inp = document.getElementById("typeInput");
   if (inp) inp.focus();
@@ -1029,6 +1066,7 @@ app.addEventListener("click", (e) => {
   else if (action === "encore") start(state.mode);
   else if (action === "menu") { state.screen = "menu"; render(); }
   else if (action === "show-stats") { state.screen = "stats"; render(); }
+  else if (action === "show-help") { state.screen = "help"; render(); }
   else if (action === "clear-history") {
     state.history = [];
     try { localStorage.removeItem(HIST_KEY); } catch {}
