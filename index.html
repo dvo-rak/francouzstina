@@ -213,6 +213,8 @@
   .statNote { color: #8391ad; font-size: 0.85rem; margin-top: 12px; }
   .helpCard p { font-size: 0.94rem; line-height: 1.55; margin: 10px 0 0; }
   .helpCard p:first-of-type { margin-top: 12px; }
+  .voiceDiag { font-size: 0.82rem; color: #8391ad; margin: 10px 0 0; }
+  .voiceDiag.warn { color: #b8302f; }
   .knowBtn {
     background: #fff; border: 1.5px solid #b9c6de; border-radius: 999px;
     color: #2e7d4f; font-family: inherit; font-size: 0.78rem;
@@ -242,6 +244,8 @@
 <script src="data.js"></script>
 <script>
 "use strict";
+
+const APP_VERSION = "7";
 
 // ── Skládání tvarů ──────────────────────────────────────────
 const PRONOUNS = ["je", "tu", "il", "nous", "vous", "ils"];
@@ -384,11 +388,24 @@ function pickFrVoice() {
   frVoice =
     vs.find((v) => /^fr[-_]FR/i.test(v.lang)) ||
     vs.find((v) => /^fr/i.test(v.lang)) ||
+    vs.find((v) => /fran(ç|c)ais|french/i.test(v.name)) ||
     null;
+}
+// diagnostika pro menu: jaký hlas se reálně použije
+function voiceDiag() {
+  if (!TTS_OK) return null;
+  pickFrVoice();
+  if (frVoice) return { ok: true, msg: "Hlas: " + frVoice.name + " (" + frVoice.lang + ")" };
+  const n = speechSynthesis.getVoices().length;
+  if (n === 0) return { ok: false, msg: "Hlasy se ještě načítají — zkus přehrát první otázku a vrať se sem." };
+  return { ok: false, msg: "Francouzský hlas v zařízení nenalezen (" + n + " hlasů, žádný fr) — předčítání bude anglicky. Návod na instalaci je v Nápovědě." };
 }
 if (TTS_OK) {
   pickFrVoice();
-  speechSynthesis.onvoiceschanged = pickFrVoice;
+  speechSynthesis.onvoiceschanged = () => {
+    pickFrVoice();
+    if (state.screen === "menu") render(); // ať se diagnostika obnoví
+  };
 }
 function speak(text) {
   if (!TTS_OK) return;
@@ -794,7 +811,7 @@ function renderMenu() {
   const pool = getPool();
   let html =
     '<h1 class="title">Mon cahier de français</h1>' +
-    '<p class="subtitle">procvičování francouzštiny · ' + pool.length + " sloves · " + NOUNS.length + " podst. jmen</p>";
+    '<p class="subtitle">procvičování francouzštiny · ' + pool.length + " sloves · " + NOUNS.length + " podst. jmen · v" + APP_VERSION + "</p>";
 
   html += '<div class="card"><span class="label">Slovesa</span>' +
     chipRow(
@@ -819,7 +836,12 @@ function renderMenu() {
       ],
       (o) => (o.id === "ans" ? state.ans === "text" : state[o.id]),
       "toggle"
-    ) + "</div>";
+    ) +
+    (state.sound && TTS_OK ? (() => {
+      const d = voiceDiag();
+      return d ? '<p class="voiceDiag' + (d.ok ? "" : " warn") + '">' + esc(d.msg) + "</p>" : "";
+    })() : "") +
+    "</div>";
 
   html +=
     '<button class="modeBtn" data-action="start" data-id="conj">Časování<small>nous + prendre → nous prenons</small></button>' +
