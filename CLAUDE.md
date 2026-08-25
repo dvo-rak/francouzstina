@@ -77,8 +77,14 @@ vaty. Chyby přiznej rovnou. Přítelkyni se říká „QA".
 - Denní počítadlo v `fr-cahier-days` (klíč YYYY-MM-DD, prořezává se >120 dní);
   streak = po sobě jdoucí dny se splněným `goal` (dnešek se počítá až po
   splnění).
+- Vyřazování z rotace: `fr-cahier-hidden` = pole statId (`t|i`, `s|i`, `gr|i`,
+  `d|i`). Filtruje se přes `idxPool()` v režimech sent/gram/dict/čtení
+  i ve frontách due/errs; když by po filtru nic nezbylo, vyřazení se ignoruje
+  (fallback). DŮSLEDEK: pole SENTENCES/GRAMMAR/DICT/TEXTS jsou APPEND-ONLY —
+  nikdy nemazat ani nepřeskupovat položky, indexy jsou uložené v uživatelských
+  datech (hidden + statistiky).
 - Záloha/obnova (Statistiky): JSON s `{app:"francouzstina", history, stats,
-  days, settings}`.
+  days, hidden, settings}`.
 - Stavitelé otázek (`buildConj`, `buildVocab`, `buildGram`, `buildDict`…)
   jsou sdílení mezi režimy, mixem i frontami — novou funkcionalitu věš na ně,
   ne na kopie logiky.

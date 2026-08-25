@@ -228,6 +228,12 @@
   .dw.acc { color: #c07d1a; font-weight: 600; }
   .dw.bad { color: #b8302f; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
   .dictYours { color: #8391ad; font-size: 0.9rem; margin-top: 6px; }
+  .hideLink {
+    display: block; background: none; border: none; font-family: inherit;
+    color: #8391ad; font-size: 0.82rem; cursor: pointer; padding: 0;
+    margin-top: 12px; text-decoration: underline; text-underline-offset: 2px;
+  }
+  .hideLink:hover { color: #b8302f; }
   .knowBtn {
     background: #fff; border: 1.5px solid #b9c6de; border-radius: 999px;
     color: #2e7d4f; font-family: inherit; font-size: 0.78rem;
@@ -258,7 +264,7 @@
 <script>
 "use strict";
 
-const APP_VERSION = "12 (2026-08-25)";
+const APP_VERSION = "13 (2026-08-25)";
 
 // ── Skládání tvarů ──────────────────────────────────────────
 const PRONOUNS = ["je", "tu", "il", "nous", "vous", "ils"];
@@ -443,6 +449,7 @@ const HIST_KEY = "fr-cahier-history";
 const STATS_KEY = "fr-cahier-stats";
 const SETTINGS_KEY = "fr-cahier-settings";
 const DAYS_KEY = "fr-cahier-days";
+const HIDDEN_KEY = "fr-cahier-hidden";
 function loadJSON(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch { return fallback; }
 }
@@ -484,14 +491,27 @@ function streakInfo() {
   while ((state.days[todayKey(i)] || 0) >= state.goal) { streak++; i++; }
   return { today, streak };
 }
+// vyřazování z rotace (texty, věty, gramatika, diktáty)
+const isHidden = (id) => state.hidden.includes(id);
+function setHidden(id, on) {
+  state.hidden = on ? [...new Set([...state.hidden, id])] : state.hidden.filter((x) => x !== id);
+  saveJSON(HIDDEN_KEY, state.hidden);
+}
+// pool indexů s vynecháním vyřazených; když by nezbylo nic, vyřazení se ignoruje
+function idxPool(arr, prefix, extraFilter) {
+  let idxs = arr.map((_, i) => i).filter((i) => (!extraFilter || extraFilter(i)) && !isHidden(prefix + i));
+  if (!idxs.length) idxs = arr.map((_, i) => i).filter((i) => !extraFilter || extraFilter(i));
+  return idxs;
+}
+
 // položky k opakování / chybové (čtení t| se do front nehodí — je to celá session)
 const dueIds = () =>
   Object.entries(state.stats)
-    .filter(([id, s]) => s.due && s.due <= Date.now() && !id.startsWith("t|"))
+    .filter(([id, s]) => s.due && s.due <= Date.now() && !id.startsWith("t|") && !isHidden(id))
     .map(([id]) => id);
 const errIds = () =>
   Object.entries(state.stats)
-    .filter(([id, s]) => s.b > 0 && !id.startsWith("t|"))
+    .filter(([id, s]) => s.b > 0 && !id.startsWith("t|") && !isHidden(id))
     .sort((a, b) => b[1].b / (b[1].o + b[1].b) - a[1].b / (a[1].o + a[1].b))
     .slice(0, 20)
     .map(([id]) => id);
@@ -537,6 +557,7 @@ const state = {
   history: loadJSON(HIST_KEY, []),
   stats: loadJSON(STATS_KEY, {}),
   days: loadJSON(DAYS_KEY, {}), // "YYYY-MM-DD" → počet odpovědí
+  hidden: loadJSON(HIDDEN_KEY, []), // vyřazené položky (statId: t|, s|, gr|, d|)
   queue: [], // fronta statId pro režimy due/errs
   qi: 0,
   cteIdx: 0,     // čtení: index aktuálního textu
@@ -808,14 +829,15 @@ function makeQuestion() {
     }
 
     if (mode === "sent") {
-      const cands = Array.from({ length: K }, () => rnd(SENTENCES.length));
+      const idxs = idxPool(SENTENCES, "s|");
+      const cands = Array.from({ length: K }, () => pick(idxs));
       const si = sampleWeighted(cands, (i) => "s|" + i);
       if ("s|" + si === (prevKey || "")) continue;
       return buildSent(si);
     }
 
     if (mode === "gram") {
-      const idxs = GRAMMAR.map((_, i) => i).filter((i) => lvlOk(GRAMMAR[i].lvl, "B1"));
+      const idxs = idxPool(GRAMMAR, "gr|", (i) => lvlOk(GRAMMAR[i].lvl, "B1"));
       const cands = Array.from({ length: K }, () => pick(idxs));
       const gi = sampleWeighted(cands, (i) => "gr|" + i);
       const q = buildGram(gi);
@@ -824,7 +846,7 @@ function makeQuestion() {
     }
 
     if (mode === "dict") {
-      const idxs = DICT.map((_, i) => i).filter((i) => lvlOk(DICT[i].lvl, "B1"));
+      const idxs = idxPool(DICT, "d|", (i) => lvlOk(DICT[i].lvl, "B1"));
       const cands = Array.from({ length: K }, () => pick(idxs));
       const di = sampleWeighted(cands, (i) => "d|" + i);
       const q = buildDict(di);
@@ -872,7 +894,7 @@ function makeQuestion() {
 
 // výběr textu pro čtení (vážený chybovostí, bez okamžitého opakování)
 function pickText() {
-  let idxs = TEXTS.map((_, i) => i).filter((i) => lvlOk(TEXTS[i].level, "B1"));
+  let idxs = idxPool(TEXTS, "t|", (i) => lvlOk(TEXTS[i].level, "B1"));
   if (!idxs.length) idxs = TEXTS.map((_, i) => i);
   if (idxs.length > 1 && state.lastText !== null) {
     idxs = idxs.filter((i) => i !== state.lastText);
@@ -1216,6 +1238,9 @@ function renderQuiz() {
       html += '<p class="correction">→ ' + esc(q.correct) + "</p>";
     }
     if (q.why) html += '<p class="why">' + esc(q.why) + "</p>";
+    if (/^(s|gr|d)\|/.test(q.statId || "")) {
+      html += '<button class="hideLink" data-action="hide-item" data-id="' + esc(q.statId) + '">🚫 tuhle položku už nedávat</button>';
+    }
     const last = state.mode === "cete"
       ? state.cteQ >= TEXTS[state.cteIdx].qs.length - 1
       : state.mode === "due" || state.mode === "errs"
@@ -1237,6 +1262,9 @@ function renderDone() {
     '<div class="donePct">' + pct + " % správně</div>" +
     '<div class="doneMeta">' + MODE_LABEL[state.mode] + "</div>" +
     '<button class="nextBtn" data-action="encore">Encore ! (ještě jednou)</button>' +
+    (state.mode === "cete" && !isHidden("t|" + state.cteIdx)
+      ? '<button class="modeBtn doneMenuBtn" data-action="hide-item" data-id="t|' + state.cteIdx + '">🚫 Tenhle text už nedávat</button>'
+      : "") +
     '<button class="modeBtn doneMenuBtn" data-action="menu">Zpět do menu</button>' +
     "</div>";
 }
@@ -1298,6 +1326,23 @@ function renderStats() {
     statRows(Object.entries(aggStats("t|")), (k) => esc((TEXTS[Number(k)] || {}).title || "text " + k), 5, (k) => "t|" + k) + "</div>";
 
   html += '<p class="statNote">Chytré opakování 🧠 z těchhle dat automaticky častěji vybírá to, kde jsou chyby. Tlačítkem „✓ umím“ položku vynuluješ — zmizí ze seznamu a přestane se protežovat. Když se chyby vrátí, objeví se tu zase.</p>';
+  if (state.hidden.length) {
+    const label = (id) => {
+      const p = id.split("|");
+      const i = Number(p[1]);
+      if (p[0] === "t") return (TEXTS[i] || {}).title || id;
+      if (p[0] === "s") return (SENTENCES[i] || {}).s || id;
+      if (p[0] === "gr") return (GRAMMAR[i] || {}).s || id;
+      if (p[0] === "d") return (DICT[i] || {}).s || id;
+      return id;
+    };
+    html += '<div class="card"><div class="histHead"><span class="label">Vyřazené položky (' + state.hidden.length + ')</span>' +
+      '<button class="histClear" data-action="unhide-all">obnovit vše</button></div>' +
+      state.hidden.map((id) =>
+        '<div class="statRow"><span class="statName">' + esc(label(id)) + "</span>" +
+        '<span class="statVal"><button class="knowBtn" data-action="unhide-item" data-id="' + esc(id) + '">↩ obnovit</button></span></div>'
+      ).join("") + "</div>";
+  }
   html += '<div class="card"><span class="label">Záloha dat</span>' +
     '<p class="statEmpty" style="margin-bottom:10px">Historie, statistiky i pokrok jsou jen v tomhle prohlížeči. Zálohou je přeneseš na jiné zařízení.</p>' +
     '<button class="modeBtn" data-action="export-data" style="margin-bottom:8px">⬇ Stáhnout zálohu</button>' +
@@ -1311,7 +1356,7 @@ function renderStats() {
 function exportData() {
   const payload = {
     app: "francouzstina", exported: new Date().toISOString(),
-    history: state.history, stats: state.stats, days: state.days,
+    history: state.history, stats: state.stats, days: state.days, hidden: state.hidden,
     settings: {
       level: state.level, tenseIds: state.tenseIds, grp: state.grp,
       sessionLen: state.sessionLen, ans: state.ans, smart: state.smart,
@@ -1336,6 +1381,8 @@ function importData(file) {
       state.history = d.history || [];
       state.stats = d.stats || {};
       state.days = d.days || {};
+      state.hidden = d.hidden || [];
+      saveJSON(HIDDEN_KEY, state.hidden);
       Object.assign(state, d.settings || {});
       saveJSON(HIST_KEY, state.history);
       saveJSON(STATS_KEY, state.stats);
@@ -1384,7 +1431,8 @@ function renderHelp() {
 
     '<div class="card helpCard"><span class="label">📊 Statistiky a „✓ umím“</span>' +
     '<p>Statistiky ukazují, co ti jde nejhůř — nejtěžší slovesa, časy, slovíčka, čísla, rody, věty i texty. Přesně z nich čerpá chytré opakování.</p>' +
-    '<p>Tlačítko <b>„✓ umím“</b> vynuluje počítadlo dané položky: zmizí ze seznamu a přestane se ti podsouvat častěji. Není to napořád — když v ní zase uděláš chybu, objeví se tu znovu. Klidně mačkej, nic si tím nerozbiješ.</p>' +
+    '<p>Tlačítko <b>„✓ umím“</b> vynuluje počítadlo dané položky: zmizí ze seznamu a přestane se ti podsouvat častěji. Není to napořád — když v ní zase uděláš chybu, objeví se tu znovu.</p>' +
+    '<p><b>🚫 už nedávat</b> — když nějaký text, větu, gramatickou položku nebo diktát znáš už nazpaměť, vyřaď ji z rotace úplně: u textů tlačítkem na výsledkové obrazovce, u ostatních odkazem pod odpovědí. Vyřazené položky se přestanou losovat i plánovat k opakování; seznam s možností obnovení je ve Statistikách.</p>' +
     '</div>' +
 
     '<div class="card helpCard"><span class="label">Soukromí a data</span>' +
@@ -1436,6 +1484,16 @@ app.addEventListener("click", (e) => {
   else if (action === "clear-history") {
     state.history = [];
     try { localStorage.removeItem(HIST_KEY); } catch {}
+    render();
+  }
+  else if (action === "hide-item") {
+    setHidden(id, true);
+    if (state.screen === "quiz") next(); else render();
+  }
+  else if (action === "unhide-item") { setHidden(id, false); render(); }
+  else if (action === "unhide-all") {
+    state.hidden = [];
+    saveJSON(HIDDEN_KEY, state.hidden);
     render();
   }
   else if (action === "export-data") exportData();
