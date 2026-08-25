@@ -46,6 +46,15 @@ vaty. Chyby přiznej rovnou. Přítelkyni se říká „QA".
   - `SUBJ_FORMS` — úplně nepravidelný subjonctif (être, avoir, faire, pouvoir,
     savoir, aller, vouloir); ostatní se odvozuje z ils-tvaru a nous-tvaru.
   - `NOUNS` — rody: `{n, lvl?, g: "m"|"f", cz}` (bez `lvl` = A2). Vybírej zrádná slova.
+  - `GRAMMAR` — doplňování: `{lvl, topic (česky), s (věta s ___), o[], c, why?}`;
+    `c` musí být přesný řetězec z `o`. Obecný engine pro libovolná gramatická
+    témata — nová témata = jen data.
+  - `DICT` — diktáty: `{lvl, s}` (celá věta pro TTS; vyhodnocení po slovech,
+    tolerantní k interpunkci/velikosti/apostrofům psaným mezerou; akcenty
+    jen varují).
+  - `VOCAB` — tematická slovíčka: `{fr, cz, lvl, th (téma česky)}`; `fr` unikátní
+    napříč VOCAB (statId je `v|fr`, sdílený se slovesy). Distraktory se berou
+    přednostně ze stejného tématu.
   - `SENTENCES` — věty PC×imparfait: `{s (s ___), inf, p (0–5), t: "imp"|"pc", why}`.
     POZOR: obě varianty (imp i pc tvar) musí gramaticky pasovat do mezery —
     žádné „je ___", kde by tvar začínal samohláskou (elize j').
@@ -56,6 +65,23 @@ vaty. Chyby přiznej rovnou. Přítelkyni se říká „QA".
 - `README.md` — jen úvod + sekce pro správce. Uživatelská nápověda žije
   VÝHRADNĚ v appce (`renderHelp()` v index.html) — README ji záměrně
   neduplikuje, aby nebylo co zapomenout synchronizovat.
+
+## SRS, fronty a streak (index.html)
+
+- `recStat` vede Leitner SRS: každá položka `{o, b, box 1–5, due}`;
+  intervaly `BOX_DAYS = [_,1,3,7,14,30]` dní. Správně → box+1, chyba → box 1.
+- Režimy `due` (📅 K zopakování) a `errs` (🔁 Moje chyby) jedou z fronty
+  `state.queue` statId; otázky staví `questionFromStatId()` — pozor, musí
+  umět všechny prefixy (c|, v|, n|, g|, s|, gr|, d|); `t|` (čtení) se do
+  front nefiltruje. Nerozložitelná id (smazaná data) se tiše přeskakují.
+- Denní počítadlo v `fr-cahier-days` (klíč YYYY-MM-DD, prořezává se >120 dní);
+  streak = po sobě jdoucí dny se splněným `goal` (dnešek se počítá až po
+  splnění).
+- Záloha/obnova (Statistiky): JSON s `{app:"francouzstina", history, stats,
+  days, settings}`.
+- Stavitelé otázek (`buildConj`, `buildVocab`, `buildGram`, `buildDict`…)
+  jsou sdílení mezi režimy, mixem i frontami — novou funkcionalitu věš na ně,
+  ne na kopie logiky.
 
 ## Odvozování tvarů (index.html)
 

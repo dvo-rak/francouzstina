@@ -215,6 +215,19 @@
   .helpCard p:first-of-type { margin-top: 12px; }
   .voiceDiag { font-size: 0.82rem; color: #8391ad; margin: 10px 0 0; }
   .voiceDiag.warn { color: #b8302f; }
+  .secLabel { display: block; margin: 20px 0 10px; }
+  .streakCard { padding: 14px 18px; }
+  .streakLine { font-size: 0.95rem; color: #5a6b8c; }
+  .streakLine b { color: #17356e; }
+  .hm { display: flex; gap: 3px; margin-top: 10px; }
+  .hmd { width: 11px; height: 11px; border-radius: 3px; background: #e8ecf3; flex: 1; max-width: 13px; }
+  .hmd.p { background: #a5c4e8; }
+  .hmd.g { background: #2e7d4f; }
+  .dictDiff { line-height: 1.7; }
+  .dw.good { color: #2e7d4f; font-weight: 600; }
+  .dw.acc { color: #c07d1a; font-weight: 600; }
+  .dw.bad { color: #b8302f; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+  .dictYours { color: #8391ad; font-size: 0.9rem; margin-top: 6px; }
   .knowBtn {
     background: #fff; border: 1.5px solid #b9c6de; border-radius: 999px;
     color: #2e7d4f; font-family: inherit; font-size: 0.78rem;
@@ -245,7 +258,7 @@
 <script>
 "use strict";
 
-const APP_VERSION = "11 (2026-08-25)";
+const APP_VERSION = "12 (2026-08-25)";
 
 // ── Skládání tvarů ──────────────────────────────────────────
 const PRONOUNS = ["je", "tu", "il", "nous", "vous", "ils"];
@@ -355,6 +368,7 @@ const OOPS = ["Oh non…", "Presque !", "Pas tout à fait…", "Hmm…"];
 const MODE_LABEL = {
   mix: "Mix", conj: "Časování", frcz: "FR → ČJ", czfr: "ČJ → FR",
   sent: "PC × Imparfait", num: "Čísla", gen: "Rody", cete: "Čtení",
+  gram: "Gramatika", dict: "Diktát", due: "Opakování", errs: "Moje chyby",
 };
 const GRP_LABEL = { all: "všechna", irr: "nepravidelná", reg: "pravidelná" };
 const LENGTHS = [
@@ -428,6 +442,7 @@ function speak(text) {
 const HIST_KEY = "fr-cahier-history";
 const STATS_KEY = "fr-cahier-stats";
 const SETTINGS_KEY = "fr-cahier-settings";
+const DAYS_KEY = "fr-cahier-days";
 function loadJSON(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch { return fallback; }
 }
@@ -435,14 +450,51 @@ function saveJSON(key, val) {
   try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
 }
 
-// statistiky: { "<id>": { o: správně, b: chybně } }
+// statistiky + Leitner SRS:
+// { "<id>": { o, b, box: 1–5, due: timestamp } }
+// správně → krabička +1 (max 5), chyba → krabička 1;
+// intervaly krabiček: 1 / 3 / 7 / 14 / 30 dní
+const BOX_DAYS = [0, 1, 3, 7, 14, 30];
 function recStat(id, ok) {
   if (!id) return;
   const st = state.stats;
   if (!st[id]) st[id] = { o: 0, b: 0 };
   if (ok) st[id].o++; else st[id].b++;
+  const box = ok ? Math.min((st[id].box || 0) + 1, 5) : 1;
+  st[id].box = box;
+  st[id].due = Date.now() + BOX_DAYS[box] * 864e5;
   saveJSON(STATS_KEY, st);
+  // denní počítadlo (streak)
+  const k = todayKey();
+  state.days[k] = (state.days[k] || 0) + 1;
+  for (const dk of Object.keys(state.days)) {
+    if (Date.now() - new Date(dk).getTime() > 120 * 864e5) delete state.days[dk];
+  }
+  saveJSON(DAYS_KEY, state.days);
 }
+const pad2 = (n) => String(n).padStart(2, "0");
+function todayKey(offsetDays) {
+  const d = new Date(Date.now() - (offsetDays || 0) * 864e5);
+  return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+}
+function streakInfo() {
+  const today = state.days[todayKey()] || 0;
+  let streak = 0;
+  let i = today >= state.goal ? 0 : 1; // dnešek se počítá, až když je cíl splněný
+  while ((state.days[todayKey(i)] || 0) >= state.goal) { streak++; i++; }
+  return { today, streak };
+}
+// položky k opakování / chybové (čtení t| se do front nehodí — je to celá session)
+const dueIds = () =>
+  Object.entries(state.stats)
+    .filter(([id, s]) => s.due && s.due <= Date.now() && !id.startsWith("t|"))
+    .map(([id]) => id);
+const errIds = () =>
+  Object.entries(state.stats)
+    .filter(([id, s]) => s.b > 0 && !id.startsWith("t|"))
+    .sort((a, b) => b[1].b / (b[1].o + b[1].b) - a[1].b / (a[1].o + a[1].b))
+    .slice(0, 20)
+    .map(([id]) => id);
 const errWeight = (id) => {
   const s = state.stats[id];
   if (!s) return 1.3; // mírná preference dosud neviděných
@@ -469,6 +521,8 @@ const DEFAULT_SETTINGS = {
   ans: "choice", // choice | text
   smart: true,
   sound: false,
+  goal: 20, // denní cíl (počet otázek)
+  vocabSrc: "all", // all | verbs | themes
 };
 const state = {
   screen: "menu", // menu | quiz | done | stats
@@ -482,6 +536,9 @@ const state = {
   score: { ok: 0, total: 0, streak: 0 },
   history: loadJSON(HIST_KEY, []),
   stats: loadJSON(STATS_KEY, {}),
+  days: loadJSON(DAYS_KEY, {}), // "YYYY-MM-DD" → počet odpovědí
+  queue: [], // fronta statId pro režimy due/errs
+  qi: 0,
   cteIdx: 0,     // čtení: index aktuálního textu
   cteQ: 0,       // čtení: index otázky v textu
   lastText: null,
@@ -497,6 +554,7 @@ function saveSettings() {
   saveJSON(SETTINGS_KEY, {
     level: state.level, tenseIds: state.tenseIds, grp: state.grp,
     sessionLen: state.sessionLen, ans: state.ans, smart: state.smart, sound: state.sound,
+    goal: state.goal, vocabSrc: state.vocabSrc,
   });
 }
 
@@ -509,161 +567,277 @@ function getPool() {
 const nounPool = () => NOUNS.filter((n) => lvlOk(n.lvl, "A2"));
 // režimy dostupné na dané úrovni (věty PC×imp až od A2, kde je PC)
 const mixModes = () => {
-  const m = ["conj", "conj", "conj", "frcz", "czfr", "num", "gen", "gen"];
+  const m = ["conj", "conj", "conj", "frcz", "czfr", "num", "gen", "gen", "gram", "gram"];
   if (LVL[state.level] >= LVL.A2) m.push("sent", "sent");
   return m;
 };
+// slovíčka: slovesa / tematická zásoba / obojí, dle nastavení a úrovně
+function vocabItems() {
+  const verbs = getPool().map((v) => ({ fr: v.inf, cz: v.cz, th: null }));
+  const themes = VOCAB.filter((v) => lvlOk(v.lvl, "A2")).map((v) => ({ fr: v.fr, cz: v.cz, th: v.th }));
+  return state.vocabSrc === "verbs" ? verbs : state.vocabSrc === "themes" ? themes : verbs.concat(themes);
+}
 
 // ── Generování otázek ───────────────────────────────────────
 // q: { key, statId, prompt, big, sub, correct, options?, accepted?,
-//      answerType: "choice"|"text", prefix?, inputMode?, audio?, why?, sayAfter? }
+//      answerType: "choice"|"text", dict?, prefix?, inputMode?, audio?, why?, sayAfter? }
+
+// stavitelé jednotlivých typů (sdílené režimy i frontou due/errs)
+function buildConj(verb, tense, i) {
+  const correct = conjDisplay(verb, tense, i);
+  const q = {
+    key: "c|" + verb.inf + "|" + tense + "|" + i,
+    statId: "c|" + verb.inf + "|" + tense,
+    prompt: verb.inf,
+    sub: verb.cz + " · " + TENSE_LABEL[tense],
+    big: (tense === "subj" ? typePrefix("subj", i) : PRONOUNS[i]) + " … ?",
+    correct,
+  };
+  if (state.ans === "text") {
+    q.answerType = "text";
+    q.prefix = typePrefix(tense, i);
+    q.accepted = [conjBare(verb, tense, i)];
+  } else {
+    q.answerType = "choice";
+    const set = new Set();
+    for (const t of TENSES.filter((t) => LVL[t.lvl] <= LVL[state.level])) {
+      for (let p = 0; p < 6; p++) {
+        const f = conjDisplay(verb, t.id, p);
+        if (f !== correct) set.add(f);
+      }
+    }
+    q.options = shuffle([correct, ...shuffle([...set]).slice(0, 3)]);
+  }
+  return q;
+}
+
+function buildVocab(item, dir, items) {
+  // distraktory nejlépe ze stejného tématu
+  let others = items.filter((x) => x.fr !== item.fr && item.th && x.th === item.th);
+  if (others.length < 3) others = items.filter((x) => x.fr !== item.fr);
+  others = shuffle(others).slice(0, 3);
+  if (dir === "frcz") {
+    return {
+      key: "frcz|" + item.fr, statId: "v|" + item.fr,
+      prompt: "Co znamená…", sub: "vyber český význam",
+      big: item.fr, correct: item.cz,
+      answerType: "choice",
+      options: shuffle([item.cz, ...others.map((x) => x.cz)]),
+      audio: state.sound ? item.fr : null,
+    };
+  }
+  const q = {
+    key: "czfr|" + item.fr, statId: "v|" + item.fr,
+    prompt: "Jak se řekne…",
+    big: item.cz, correct: item.fr,
+    sayAfter: state.sound ? item.fr : null,
+  };
+  if (state.ans === "text") {
+    q.answerType = "text";
+    q.sub = "napiš francouzsky";
+    q.accepted = [item.fr];
+  } else {
+    q.answerType = "choice";
+    q.sub = "vyber francouzsky";
+    q.options = shuffle([item.fr, ...others.map((x) => x.fr)]);
+  }
+  return q;
+}
+
+function numOptions(n) {
+  const ds = new Set([n]);
+  for (let g = 0; ds.size < 4 && g < 50; g++) ds.add(numDistractor(n));
+  while (ds.size < 4) ds.add(rnd(101)); // pojistka: málo kandidátů (např. n=0)
+  return [...ds];
+}
+
+function buildNum(n) {
+  const word = frNumber(n);
+  const q = {
+    key: "num|" + n, statId: "n|" + Math.floor(n / 10) * 10,
+    prompt: "Jak se řekne francouzsky…",
+    big: String(n), sub: "",
+    correct: word,
+    sayAfter: state.sound ? word : null,
+  };
+  if (state.ans === "text") { q.answerType = "text"; q.accepted = [word]; }
+  else { q.answerType = "choice"; q.options = shuffle(numOptions(n).map(frNumber)); }
+  return q;
+}
+
+function buildNumListen(n) {
+  const q = {
+    key: "numL|" + n, statId: "n|" + Math.floor(n / 10) * 10,
+    prompt: "Poslouchej a napiš číslo",
+    big: "🔊", audio: frNumber(n), sub: "klikni na 🔊 pro přehrání",
+    correct: String(n),
+  };
+  if (state.ans === "text") { q.answerType = "text"; q.accepted = [String(n)]; q.inputMode = "numeric"; }
+  else { q.answerType = "choice"; q.options = shuffle(numOptions(n).map(String)); }
+  return q;
+}
+
+function buildGen(noun) {
+  return {
+    key: "g|" + noun.n, statId: "g|" + noun.n,
+    prompt: "un, nebo une?",
+    big: "… " + noun.n, sub: noun.cz,
+    correct: noun.g === "m" ? "un" : "une",
+    answerType: "choice",
+    options: ["un", "une"],
+    sayAfter: state.sound ? (noun.g === "m" ? "un " : "une ") + noun.n : null,
+  };
+}
+
+function buildSent(si) {
+  const sn = SENTENCES[si];
+  const verb = VERBS.find((v) => v.inf === sn.inf);
+  const impF = conjBare(verb, "imp", sn.p);
+  const pcF = conjBare(verb, "pc", sn.p);
+  return {
+    key: "s|" + si, statId: "s|" + si,
+    prompt: "Doplň správný čas:",
+    big: sn.s, bigClass: "sentence",
+    sub: sn.inf + " (" + verb.cz + ")",
+    correct: sn.t === "imp" ? impF : pcF,
+    answerType: "choice",
+    options: shuffle([impF, pcF]),
+    why: sn.why,
+    sayAfter: state.sound ? sn.s.replace("___", sn.t === "imp" ? impF : pcF) : null,
+  };
+}
+
+function buildGram(gi) {
+  const g = GRAMMAR[gi];
+  return {
+    key: "gr|" + gi, statId: "gr|" + gi,
+    prompt: "Gramatika · " + g.topic,
+    big: g.s, bigClass: "sentence",
+    sub: "",
+    correct: g.c,
+    answerType: "choice",
+    options: shuffle([...g.o]),
+    why: g.why || null,
+    sayAfter: state.sound ? g.s.replace("___", g.c) : null,
+  };
+}
+
+function buildDict(di) {
+  const d = DICT[di];
+  return {
+    key: "d|" + di, statId: "d|" + di,
+    prompt: "Diktát",
+    big: "🔊", audio: d.s,
+    sub: "poslouchej (🔊 přehraje znovu) a napiš celou větu",
+    correct: d.s,
+    answerType: "text", dict: true,
+    accepted: [d.s],
+  };
+}
+
+// otázka z uloženého statId (fronty due/errs)
+function questionFromStatId(id) {
+  const p = id.split("|");
+  if (p[0] === "c") {
+    const verb = VERBS.find((v) => v.inf === p[1]);
+    if (!verb || !TENSE_LABEL[p[2]]) return null;
+    return buildConj(verb, p[2], rnd(6));
+  }
+  if (p[0] === "v") {
+    const items = vocabItems();
+    let item = items.find((x) => x.fr === p[1]);
+    if (!item) {
+      const verb = VERBS.find((v) => v.inf === p[1]);
+      const voc = VOCAB.find((v) => v.fr === p[1]);
+      item = verb ? { fr: verb.inf, cz: verb.cz, th: null } : voc ? { fr: voc.fr, cz: voc.cz, th: voc.th } : null;
+    }
+    if (!item) return null;
+    const poolItems = items.length >= 4 ? items : vocabItems();
+    return buildVocab(item, Math.random() < 0.5 ? "frcz" : "czfr", poolItems);
+  }
+  if (p[0] === "n") {
+    const dec = Number(p[1]);
+    const n = Math.min(100, dec + rnd(10));
+    return buildNum(n);
+  }
+  if (p[0] === "g") {
+    const noun = NOUNS.find((x) => x.n === p[1]);
+    return noun ? buildGen(noun) : null;
+  }
+  if (p[0] === "s") return SENTENCES[Number(p[1])] ? buildSent(Number(p[1])) : null;
+  if (p[0] === "gr") return GRAMMAR[Number(p[1])] ? buildGram(Number(p[1])) : null;
+  if (p[0] === "d") return DICT[Number(p[1])] ? buildDict(Number(p[1])) : null;
+  return null;
+}
+
 function makeQuestion() {
+  // fronty (opakování / moje chyby): otázky z uložených id
+  if (state.mode === "due" || state.mode === "errs") {
+    while (state.qi < state.queue.length) {
+      const q = questionFromStatId(state.queue[state.qi]);
+      if (q) return q;
+      state.qi++; // nerozložitelné id (smazaná položka) přeskoč
+    }
+    return null;
+  }
+
   const pool = getPool();
   const prevKey = state.q && state.q.key;
   const K = state.smart ? 6 : 1;
 
   for (let attempt = 0; attempt < 20; attempt++) {
     const mode = state.mode === "mix" ? pick(mixModes()) : state.mode;
+
     if (mode === "conj") {
-      const cands = Array.from({ length: K }, () => {
-        const verb = pick(pool);
-        const tense = pick(state.tenseIds);
-        return { verb, tense, i: rnd(6) };
-      });
+      const cands = Array.from({ length: K }, () => ({
+        verb: pick(pool), tense: pick(state.tenseIds), i: rnd(6),
+      }));
       const c = sampleWeighted(cands, (x) => "c|" + x.verb.inf + "|" + x.tense);
-      const key = "c|" + c.verb.inf + "|" + c.tense + "|" + c.i;
-      if (key === prevKey) continue;
-      const correct = conjDisplay(c.verb, c.tense, c.i);
-      const q = {
-        key, statId: "c|" + c.verb.inf + "|" + c.tense,
-        prompt: c.verb.inf,
-        sub: c.verb.cz + " · " + TENSE_LABEL[c.tense],
-        big: (c.tense === "subj" ? typePrefix("subj", c.i) : PRONOUNS[c.i]) + " … ?",
-        correct,
-      };
-      if (state.ans === "text") {
-        q.answerType = "text";
-        q.prefix = typePrefix(c.tense, c.i);
-        q.accepted = [conjBare(c.verb, c.tense, c.i)];
-      } else {
-        q.answerType = "choice";
-        const set = new Set();
-        for (const t of TENSES.filter((t) => LVL[t.lvl] <= LVL[state.level])) {
-          for (let p = 0; p < 6; p++) {
-            const f = conjDisplay(c.verb, t.id, p);
-            if (f !== correct) set.add(f);
-          }
-        }
-        q.options = shuffle([correct, ...shuffle([...set]).slice(0, 3)]);
-      }
+      const q = buildConj(c.verb, c.tense, c.i);
+      if (q.key === prevKey) continue;
       return q;
     }
 
     if (mode === "frcz" || mode === "czfr") {
-      const cands = Array.from({ length: K }, () => pick(pool));
-      const verb = sampleWeighted(cands, (v) => "v|" + v.inf);
-      const key = mode + "|" + verb.inf;
-      if (key === prevKey) continue;
-      const others = shuffle(pool.filter((v) => v.inf !== verb.inf)).slice(0, 3);
-      if (mode === "frcz") {
-        return {
-          key, statId: "v|" + verb.inf,
-          prompt: "Co znamená…", sub: "vyber český význam",
-          big: verb.inf, correct: verb.cz,
-          answerType: "choice",
-          options: shuffle([verb.cz, ...others.map((v) => v.cz)]),
-          audio: state.sound ? verb.inf : null,
-        };
-      }
-      const q = {
-        key, statId: "v|" + verb.inf,
-        prompt: "Jak se řekne…",
-        big: verb.cz, correct: verb.inf,
-        sayAfter: state.sound ? verb.inf : null,
-      };
-      if (state.ans === "text") {
-        q.answerType = "text";
-        q.sub = "napiš francouzské sloveso";
-        q.accepted = [verb.inf];
-      } else {
-        q.answerType = "choice";
-        q.sub = "vyber francouzské sloveso";
-        q.options = shuffle([verb.inf, ...others.map((v) => v.inf)]);
-      }
+      const items = vocabItems();
+      const cands = Array.from({ length: K }, () => pick(items));
+      const item = sampleWeighted(cands, (x) => "v|" + x.fr);
+      const q = buildVocab(item, mode, items);
+      if (q.key === prevKey) continue;
       return q;
     }
 
     if (mode === "sent") {
       const cands = Array.from({ length: K }, () => rnd(SENTENCES.length));
       const si = sampleWeighted(cands, (i) => "s|" + i);
-      const key = "s|" + si;
-      if (key === prevKey) continue;
-      const sn = SENTENCES[si];
-      const verb = VERBS.find((v) => v.inf === sn.inf);
-      const impF = conjBare(verb, "imp", sn.p);
-      const pcF = conjBare(verb, "pc", sn.p);
-      const correct = sn.t === "imp" ? impF : pcF;
-      return {
-        key, statId: "s|" + si,
-        prompt: "Doplň správný čas:",
-        big: sn.s, bigClass: "sentence",
-        sub: sn.inf + " (" + verb.cz + ")",
-        correct,
-        answerType: "choice",
-        options: shuffle([impF, pcF]),
-        why: sn.why,
-        sayAfter: state.sound ? sn.s.replace("___", correct) : null,
-      };
+      if ("s|" + si === (prevKey || "")) continue;
+      return buildSent(si);
+    }
+
+    if (mode === "gram") {
+      const idxs = GRAMMAR.map((_, i) => i).filter((i) => lvlOk(GRAMMAR[i].lvl, "B1"));
+      const cands = Array.from({ length: K }, () => pick(idxs));
+      const gi = sampleWeighted(cands, (i) => "gr|" + i);
+      const q = buildGram(gi);
+      if (q.key === prevKey) continue;
+      return q;
+    }
+
+    if (mode === "dict") {
+      const idxs = DICT.map((_, i) => i).filter((i) => lvlOk(DICT[i].lvl, "B1"));
+      const cands = Array.from({ length: K }, () => pick(idxs));
+      const di = sampleWeighted(cands, (i) => "d|" + i);
+      const q = buildDict(di);
+      if (q.key === prevKey) continue;
+      return q;
     }
 
     if (mode === "num") {
       const cands = Array.from({ length: K }, () => rnd(101));
       const n = sampleWeighted(cands, (x) => "n|" + Math.floor(x / 10) * 10);
-      const key = "num|" + n;
-      if (key === prevKey) continue;
-      const statId = "n|" + Math.floor(n / 10) * 10;
-      const word = frNumber(n);
       const listening = state.sound && TTS_OK && Math.random() < 0.5;
-
-      if (listening) {
-        // poslech: přehraje se francouzsky, odpověď číslicemi
-        const q = {
-          key, statId,
-          prompt: "Poslouchej a napiš číslo",
-          big: "🔊", audio: word, sub: "klikni na 🔊 pro přehrání",
-          correct: String(n),
-        };
-        if (state.ans === "text") {
-          q.answerType = "text";
-          q.accepted = [String(n)];
-          q.inputMode = "numeric";
-        } else {
-          q.answerType = "choice";
-          const ds = new Set([n]);
-          for (let g = 0; ds.size < 4 && g < 50; g++) ds.add(numDistractor(n));
-          while (ds.size < 4) ds.add(rnd(101)); // pojistka: málo kandidátů (např. n=0)
-          q.options = shuffle([...ds].map(String));
-        }
-        return q;
-      }
-
-      const q = {
-        key, statId,
-        prompt: "Jak se řekne francouzsky…",
-        big: String(n), sub: "",
-        correct: word,
-        sayAfter: state.sound ? word : null,
-      };
-      if (state.ans === "text") {
-        q.answerType = "text";
-        q.accepted = [word];
-      } else {
-        q.answerType = "choice";
-        const ds = new Set([n]);
-        for (let g = 0; ds.size < 4 && g < 50; g++) ds.add(numDistractor(n));
-        while (ds.size < 4) ds.add(rnd(101)); // pojistka: málo kandidátů (např. n=0)
-        q.options = shuffle([...ds].map(frNumber));
-      }
+      const q = listening ? buildNumListen(n) : buildNum(n);
+      if (q.key === prevKey) continue;
       return q;
     }
 
@@ -671,17 +845,9 @@ function makeQuestion() {
       const nouns = nounPool();
       const cands = Array.from({ length: K }, () => pick(nouns));
       const noun = sampleWeighted(cands, (x) => "g|" + x.n);
-      const key = "g|" + noun.n;
-      if (key === prevKey) continue;
-      return {
-        key, statId: "g|" + noun.n,
-        prompt: "un, nebo une?",
-        big: "… " + noun.n, sub: noun.cz,
-        correct: noun.g === "m" ? "un" : "une",
-        answerType: "choice",
-        options: ["un", "une"],
-        sayAfter: state.sound ? (noun.g === "m" ? "un " : "une ") + noun.n : null,
-      };
+      const q = buildGen(noun);
+      if (q.key === prevKey) continue;
+      return q;
     }
 
     if (mode === "cete") {
@@ -736,6 +902,14 @@ function numDistractor(n) {
 function start(mode) {
   state.mode = mode;
   state.score = { ok: 0, total: 0, streak: 0 };
+  if (mode === "due") {
+    state.queue = shuffle(dueIds()).slice(0, 50);
+    state.qi = 0;
+  }
+  if (mode === "errs") {
+    state.queue = shuffle(errIds());
+    state.qi = 0;
+  }
   if (mode === "cete") {
     state.cteIdx = pickText();
     state.lastText = state.cteIdx;
@@ -766,14 +940,58 @@ function answerChoice(opt) {
   applyAnswer(opt === state.q.correct, opt);
 }
 
+// diktát: tokenizace a porovnání po slovech
+const dictTok = (s) =>
+  String(s).toLowerCase().replace(/[’']/g, "").replace(/[.,!?;:«»"()\-—…]/g, " ").split(/\s+/).filter(Boolean);
+function dictEval(input, target) {
+  const exp = dictTok(target);
+  const got = dictTok(input);
+  const marks = exp.map((w, i) => {
+    if (got[i] === w) return 2;
+    if (got[i] && stripAcc(got[i]) === stripAcc(w)) return 1;
+    return 0;
+  });
+  let ok = got.length === exp.length && marks.every((m) => m > 0);
+  let accentWarn = ok && marks.some((m) => m === 1);
+  // fallback: apostrofy psané mezerou (m appelle, aujourd hui) — porovnej slepené
+  if (!ok) {
+    const sq = (x) => dictTok(x).join("");
+    if (sq(input) === sq(target)) {
+      ok = true;
+      for (let i = 0; i < marks.length; i++) marks[i] = 2;
+    } else if (stripAcc(sq(input)) === stripAcc(sq(target))) {
+      ok = true; accentWarn = true;
+      for (let i = 0; i < marks.length; i++) marks[i] = 2;
+    }
+  }
+  return { marks, ok, accentWarn };
+}
 function answerTyped(text) {
   if (state.picked !== null || !text.trim()) return;
+  if (state.q.dict) {
+    const r = dictEval(text, state.q.correct);
+    state.dictMarks = r.marks;
+    state.accentWarn = r.accentWarn;
+    applyAnswer(r.ok, text.trim());
+    return;
+  }
   const m = matchTyped(text, state.q.accepted);
   state.accentWarn = m === 1;
   applyAnswer(m > 0, text.trim());
 }
 
 function next() {
+  if (state.mode === "due" || state.mode === "errs") {
+    state.qi++;
+    if (state.qi >= state.queue.length) { finish(); return; }
+    state.q = makeQuestion();
+    state.picked = null;
+    state.accentWarn = false;
+    if (!state.q) { finish(); return; }
+    render();
+    if (state.q.audio) speak(state.q.audio);
+    return;
+  }
   if (state.mode === "cete") {
     if (state.cteQ >= TEXTS[state.cteIdx].qs.length - 1) {
       finish();
@@ -844,6 +1062,13 @@ function renderMenu() {
     chipRow(TENSES.filter((t) => LVL[t.lvl] <= LVL[state.level]), (t) => state.tenseIds.includes(t.id), "tense") +
     '<div style="height:14px"></div><span class="label">Počet otázek</span>' +
     chipRow(LENGTHS, (l) => state.sessionLen === l.id, "len") +
+    '<div style="height:14px"></div><span class="label">Denní cíl</span>' +
+    chipRow([{ id: 10, label: "10" }, { id: 20, label: "20" }, { id: 50, label: "50" }], (g) => state.goal === g.id, "goal") +
+    '<div style="height:14px"></div><span class="label">Slovíčka</span>' +
+    chipRow(
+      [{ id: "all", label: "Vše" }, { id: "verbs", label: "Jen slovesa" }, { id: "themes", label: "Jen témata" }],
+      (v) => state.vocabSrc === v.id, "vocab-src"
+    ) +
     '<div style="height:14px"></div><span class="label">Další volby</span>' +
     chipRow(
       [
@@ -860,15 +1085,31 @@ function renderMenu() {
     })() : "") +
     "</div>";
 
+  const si = streakInfo();
+  const nDue = dueIds().length;
+  const nErr = errIds().length;
+  html += '<span class="label secLabel">Denní trénink</span>';
+  html += '<div class="card streakCard">' +
+    '<div class="streakLine">🔥 Série: <b>' + si.streak + "</b> " + (si.streak === 1 ? "den" : si.streak >= 2 && si.streak <= 4 ? "dny" : "dní") +
+    ' · dnes <b>' + si.today + "</b> / " + state.goal + "</div>" +
+    '<div class="hm">' + Array.from({ length: 28 }, (_, i) => {
+      const c = state.days[todayKey(27 - i)] || 0;
+      return '<span class="hmd' + (c >= state.goal ? " g" : c > 0 ? " p" : "") + '"></span>';
+    }).join("") + "</div></div>";
   html +=
-    '<button class="modeBtn" data-action="start" data-id="mix">🎲 Mix — všechno dohromady<small>časování, slovíčka, čísla, rody' + (LVL[state.level] >= LVL.A2 ? ", věty" : "") + " v jednom kole</small></button>" +
+    '<button class="modeBtn" data-action="start" data-id="mix">🎲 Mix — všechno dohromady<small>časování, slovíčka, gramatika, čísla, rody' + (LVL[state.level] >= LVL.A2 ? ", věty" : "") + " v jednom kole</small></button>" +
+    (nDue > 0 ? '<button class="modeBtn" data-action="start" data-id="due">📅 K zopakování dnes (' + nDue + ')<small>co je podle rozvrhu opakování na řadě</small></button>' : "") +
+    (nErr > 0 ? '<button class="modeBtn" data-action="start" data-id="errs">🔁 Moje chyby<small>kolo jen z toho, co se nedávno nepovedlo</small></button>' : "") +
+    '<span class="label secLabel">Cvičení</span>' +
     '<button class="modeBtn" data-action="start" data-id="conj">Časování<small>nous + prendre → nous prenons</small></button>' +
+    '<button class="modeBtn" data-action="start" data-id="gram">Gramatika<small>členy, předložky, zájmena, subjonctif… doplň do věty</small></button>' +
     (LVL[state.level] >= LVL.A2 ? '<button class="modeBtn" data-action="start" data-id="sent">Passé composé × imparfait<small>doplň správný čas do věty</small></button>' : "") +
     '<button class="modeBtn" data-action="start" data-id="frcz">Slovíčka: francouzsky → česky<small>mettre → dát, položit</small></button>' +
     '<button class="modeBtn" data-action="start" data-id="czfr">Slovíčka: česky → francouzsky<small>slíbit → promettre</small></button>' +
     '<button class="modeBtn" data-action="start" data-id="cete">Porozumění textu (DELF)<small>přečti text a odpověz na otázky · ' + TEXTS.filter((t) => lvlOk(t.level, "B1")).length + " textů</small></button>" +
     '<button class="modeBtn" data-action="start" data-id="num">Čísla 0–100<small>42 → quarante-deux' + (TTS_OK ? " (se zvukem i poslech)" : "") + "</small></button>" +
     '<button class="modeBtn" data-action="start" data-id="gen">Rody: un / une<small>… problème? un!</small></button>' +
+    (TTS_OK ? '<button class="modeBtn" data-action="start" data-id="dict">Diktát (dictée)<small>poslouchej větu a napiš ji</small></button>' : "") +
     '<button class="modeBtn" data-action="show-stats">📊 Statistiky chyb<small>co jde nejhůř a co procvičit</small></button>' +
     '<button class="modeBtn" data-action="show-help">ℹ️ Nápověda<small>co dělají režimy a nastavení</small></button>';
 
@@ -892,7 +1133,9 @@ function renderQuiz() {
   const q = state.q;
   const isCete = state.mode === "cete";
   let progress = "";
-  if (isCete) {
+  if (state.mode === "due" || state.mode === "errs") {
+    progress = Math.min(state.qi + 1, state.queue.length) + " / " + state.queue.length + " · ";
+  } else if (isCete) {
     progress = Math.min(state.cteQ + 1, TEXTS[state.cteIdx].qs.length) + " / " + TEXTS[state.cteIdx].qs.length + " · ";
   } else if (state.sessionLen > 0) {
     const cur = Math.min(s.total + (state.picked === null ? 1 : 0), state.sessionLen);
@@ -940,6 +1183,18 @@ function renderQuiz() {
       '<input class="typeInput" id="typeInput" autocomplete="off" autocapitalize="off" spellcheck="false"' +
       (q.inputMode ? ' inputmode="' + q.inputMode + '"' : "") + ">" +
       '<button class="typeOk" data-action="submit-typed">OK</button></div>';
+  } else if (q.dict) {
+    // diktát: očekávaná věta se značkami po slovech + co napsala
+    const expWords = q.correct.split(/\s+/);
+    const toks = dictTok(q.correct);
+    let ti = 0;
+    html += '<div class="typedAnswer dictDiff">' + expWords.map((w) => {
+      const hasTok = dictTok(w).length > 0;
+      const m = hasTok ? (state.dictMarks || [])[ti++] : 2;
+      const cls = m === 2 ? "dw good" : m === 1 ? "dw acc" : "dw bad";
+      return '<span class="' + cls + '">' + esc(w) + "</span>";
+    }).join(" ") + "</div>";
+    html += '<div class="dictYours">napsáno: ' + esc(state.picked) + "</div>";
   } else {
     const ok = state.accentWarn || matchTyped(state.picked, q.accepted) > 0;
     html += '<div class="typedAnswer">' +
@@ -951,17 +1206,21 @@ function renderQuiz() {
   if (state.picked !== null) {
     const ok = q.answerType === "choice"
       ? state.picked === q.correct
-      : matchTyped(state.picked, q.accepted) > 0;
+      : q.dict
+        ? dictEval(state.picked, q.correct).ok
+        : matchTyped(state.picked, q.accepted) > 0;
     html += '<div class="stamp ' + (ok ? "ok" : "ko") + '">' + esc(state.stamp) + "</div>";
     if (state.accentWarn) {
-      html += '<p class="accentNote">Pozor na akcenty: ' + esc(q.correct) + "</p>";
-    } else if (!ok) {
+      html += '<p class="accentNote">Pozor na akcenty' + (q.dict ? "" : ": " + esc(q.correct)) + "</p>";
+    } else if (!ok && !q.dict) {
       html += '<p class="correction">→ ' + esc(q.correct) + "</p>";
     }
     if (q.why) html += '<p class="why">' + esc(q.why) + "</p>";
     const last = state.mode === "cete"
       ? state.cteQ >= TEXTS[state.cteIdx].qs.length - 1
-      : state.sessionLen > 0 && s.total >= state.sessionLen;
+      : state.mode === "due" || state.mode === "errs"
+        ? state.qi >= state.queue.length - 1
+        : state.sessionLen > 0 && s.total >= state.sessionLen;
     html += '<button class="nextBtn" data-action="next">' + (last ? "Výsledek →" : "Další →") + "</button>";
   }
   html += "</div>";
@@ -1031,12 +1290,63 @@ function renderStats() {
     statRows(Object.entries(aggStats("g|")), (k) => esc(k), 8, (k) => "g|" + k) + "</div>";
   html += '<div class="card"><span class="label">PC × imparfait (věty)</span>' +
     statRows(Object.entries(aggStats("s|")), (k) => esc((SENTENCES[Number(k)] || {}).s || "věta " + k), 5, (k) => "s|" + k) + "</div>";
+  html += '<div class="card"><span class="label">Gramatika</span>' +
+    statRows(Object.entries(aggStats("gr|")), (k) => esc((GRAMMAR[Number(k)] || {}).s || "položka " + k), 8, (k) => "gr|" + k) + "</div>";
+  html += '<div class="card"><span class="label">Diktáty</span>' +
+    statRows(Object.entries(aggStats("d|")), (k) => esc((DICT[Number(k)] || {}).s || "věta " + k), 5, (k) => "d|" + k) + "</div>";
   html += '<div class="card"><span class="label">Čtení (podle textu)</span>' +
     statRows(Object.entries(aggStats("t|")), (k) => esc((TEXTS[Number(k)] || {}).title || "text " + k), 5, (k) => "t|" + k) + "</div>";
 
   html += '<p class="statNote">Chytré opakování 🧠 z těchhle dat automaticky častěji vybírá to, kde jsou chyby. Tlačítkem „✓ umím“ položku vynuluješ — zmizí ze seznamu a přestane se protežovat. Když se chyby vrátí, objeví se tu zase.</p>';
+  html += '<div class="card"><span class="label">Záloha dat</span>' +
+    '<p class="statEmpty" style="margin-bottom:10px">Historie, statistiky i pokrok jsou jen v tomhle prohlížeči. Zálohou je přeneseš na jiné zařízení.</p>' +
+    '<button class="modeBtn" data-action="export-data" style="margin-bottom:8px">⬇ Stáhnout zálohu</button>' +
+    '<button class="modeBtn" data-action="import-data" style="margin-bottom:0">⬆ Obnovit ze zálohy</button>' +
+    '<input type="file" id="importFile" accept="application/json" style="display:none">' +
+    "</div>";
   html += '<button class="modeBtn" data-action="clear-stats">Smazat statistiky</button>';
   return html;
+}
+
+function exportData() {
+  const payload = {
+    app: "francouzstina", exported: new Date().toISOString(),
+    history: state.history, stats: state.stats, days: state.days,
+    settings: {
+      level: state.level, tenseIds: state.tenseIds, grp: state.grp,
+      sessionLen: state.sessionLen, ans: state.ans, smart: state.smart,
+      sound: state.sound, goal: state.goal, vocabSrc: state.vocabSrc,
+    },
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 1)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "francouzstina-zaloha-" + todayKey() + ".json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importData(file) {
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const d = JSON.parse(r.result);
+      if (d.app !== "francouzstina") throw new Error("cizí soubor");
+      if (!confirm("Přepsat současný pokrok zálohou z " + (d.exported || "?").slice(0, 10) + "?")) return;
+      state.history = d.history || [];
+      state.stats = d.stats || {};
+      state.days = d.days || {};
+      Object.assign(state, d.settings || {});
+      saveJSON(HIST_KEY, state.history);
+      saveJSON(STATS_KEY, state.stats);
+      saveJSON(DAYS_KEY, state.days);
+      saveSettings();
+      render();
+    } catch (e) {
+      alert("Tohle nevypadá jako záloha téhle appky.");
+    }
+  };
+  r.readAsText(file);
 }
 
 function renderHelp() {
@@ -1049,10 +1359,14 @@ function renderHelp() {
     '</div>' +
 
     '<div class="card helpCard"><span class="label">Režimy</span>' +
-    '<p><b>🎲 Mix</b> — jedno kolo, ve kterém se střídají všechny typy cvičení tvé úrovně: časování, slovíčka oběma směry, čísla, rody a od A2 i věty PC × imparfait. Ideální jako každodenní rozcvička; chytré opakování funguje i tady.</p>' +
+    '<p><b>🎲 Mix</b> — jedno kolo, ve kterém se střídají všechny typy cvičení tvé úrovně: časování, slovíčka, gramatika, čísla, rody a od A2 i věty PC × imparfait. Ideální jako každodenní rozcvička.</p>' +
+    '<p><b>📅 K zopakování dnes</b> — appka plánuje opakování jako kartičky (Leitner): každá položka má krabičku 1–5; správná odpověď ji posune výš (opakuje se za 1 / 3 / 7 / 14 / 30 dní), chyba ji vrátí do krabičky 1. Tlačítko se objeví, jen když je dnes co opakovat, a ukáže počet.</p>' +
+    '<p><b>🔁 Moje chyby</b> — rychlé kolo jen z položek, kde se v poslední době chybovalo.</p>' +
+    '<p><b>Gramatika</b> — doplňování do vět podle témat tvé úrovně: členy, předložky, zápor, zájmena (COD/COI, y/en), srovnávání, vztažná zájmena, podmínky, subjonctif… Po odpovědi krátké vysvětlení.</p>' +
+    '<p><b>Diktát (dictée)</b> — přehraje se celá věta francouzsky (klidně opakovaně), ty ji napíšeš. Vyhodnocení po slovech: zeleně správně, oranžově jen chybějící akcent, červeně chyba.</p>' +
     '<p><b>Časování</b> — sloveso, osoba a čas; vybereš (nebo napíšeš) správný tvar. Které časy se procvičují, si zvolíš v nastavení.</p>' +
     '<p><b>Passé composé × imparfait</b> — věta s mezerou, vybíráš mezi dvěma tvary. Po odpovědi se ukáže, <i>proč</i> je správně zrovna tenhle čas (signální slova jako <i>tous les étés</i>, <i>soudain</i>, <i>d\'habitude</i>…).</p>' +
-    '<p><b>Slovíčka</b> — překlad sloves oběma směry.</p>' +
+    '<p><b>Slovíčka</b> — překlad oběma směry. V nastavení si vybereš zdroj: jen slovesa, jen tematická zásoba (jídlo, rodina, čas, barvy, cestování, počasí, oblečení, práce, pocity…), nebo obojí.</p>' +
     '<p><b>Porozumění textu (DELF)</b> — krátký text (e-mail, inzerát, článek…) a otázky francouzsky, jako u zkoušky. Text zůstává během otázek nahoře. Nabízejí se texty do tvé úrovně včetně (na B2 tedy i B1 — u zkoušky nižší úroveň neuškodí).</p>' +
     '<p><b>Čísla 0–100</b> — číslo vybereš/napíšeš francouzsky. Se zapnutým zvukem je půlka otázek poslechová: slyšíš číslo a píšeš číslice.</p>' +
     '<p><b>Rody: un / une</b> — tipuješ rod podstatného jména. Vybraná jsou hlavně zrádná slova (<i>le problème, le musée, l\'eau — f!, le bonheur…</i>).</p>' +
@@ -1061,7 +1375,8 @@ function renderHelp() {
     '<div class="card helpCard"><span class="label">Nastavení</span>' +
     '<p><b>Slovesa</b> — všechna / jen nepravidelná / jen pravidelná (platí pro časování i slovíčka).</p>' +
     '<p><b>Časy</b> — zapni/vypni jednotlivé časy pro časování. Imparfait, futur simple, conditionnel a subjonctif si přidej, až na ně dojde v kurzu.</p>' +
-    '<p><b>Počet otázek</b> — délka jednoho kola; u ∞ cvičíš, dokud nedáš „← ukončit“. U čtení je kolo vždy jeden text s 5 otázkami.</p>' +
+    '<p><b>Počet otázek</b> — délka jednoho kola; u ∞ cvičíš, dokud nedáš „← ukončit“. U čtení je kolo vždy jeden text s otázkami.</p>' +
+    '<p><b>Denní cíl a série 🔥</b> — kolik otázek denně chceš stihnout. Nahoře v menu vidíš dnešní počet, sérii dní se splněným cílem a mřížku posledních 28 dní (modrá = něco, zelená = cíl splněn).</p>' +
     '<p><b>✍ psaní odpovědí</b> — místo výběru ze 4 možností odpověď píšeš. Těžší, ale blíž zkoušce. Kontrola je tolerantní: chybějící háčky a čárky (<i>etais</i> místo <i>étais</i>) se počítají jako správně, jen s upozorněním „pozor na akcenty“; u čísel je jedno, jestli píšeš pomlčky, nebo mezery.</p>' +
     '<p><b>🧠 chytré opakování</b> — appka si (jen v tomhle prohlížeči) počítá, kde děláš chyby, a tyhle věci ti pak nabízí <b>častěji</b>. Nic víc v tom není — žádné plánování na dny dopředu, prostě „co ti nejde, chodí častěji“. Vypnuté = čistě náhodný výběr.</p>' +
     '<p><b>🔊 zvuk</b> — francouzské předčítání hlasem prohlížeče: slovíčka, čísla (i poslechové otázky), po odpovědi věty a <i>un/une + slovo</i>, u textů tlačítko „přečíst“. Pokud slyšíš angličtinu, chybí v zařízení francouzský hlas — na iPhonu: Nastavení → Zpřístupnění → Předčítání obsahu → Hlasy → Francouzština; na Androidu: nastavení Google TTS; na Windows: Nastavení → Čas a jazyk → Řeč → Přidat hlasy → Français, a pak restartovat prohlížeč.</p>' +
@@ -1073,7 +1388,7 @@ function renderHelp() {
     '</div>' +
 
     '<div class="card helpCard"><span class="label">Soukromí a data</span>' +
-    '<p>Všechno (historie, statistiky, nastavení) se ukládá jen v prohlížeči — nikam se nic neposílá, žádný účet. Druhá strana mince: data jsou vázaná na konkrétní zařízení a prohlížeč; telefon a notebook mají každý svoje, a smazání dat prohlížeče je smaže taky.</p>' +
+    '<p>Všechno (historie, statistiky, pokrok, nastavení) se ukládá jen v prohlížeči — nikam se nic neposílá, žádný účet. Data jsou tedy vázaná na konkrétní zařízení; ve Statistikách je ale tlačítko na stažení zálohy a její obnovení jinde (telefon ↔ počítač).</p>' +
     '</div>';
 }
 
@@ -1095,6 +1410,8 @@ app.addEventListener("click", (e) => {
   if (action === "grp") { state.grp = id; saveSettings(); render(); }
   else if (action === "tense") toggleTense(id);
   else if (action === "len") { state.sessionLen = Number(id); saveSettings(); render(); }
+  else if (action === "goal") { state.goal = Number(id); saveSettings(); render(); }
+  else if (action === "vocab-src") { state.vocabSrc = id; saveSettings(); render(); }
   else if (action === "level") {
     state.level = id;
     state.tenseIds = tensePreset(id);
@@ -1121,6 +1438,8 @@ app.addEventListener("click", (e) => {
     try { localStorage.removeItem(HIST_KEY); } catch {}
     render();
   }
+  else if (action === "export-data") exportData();
+  else if (action === "import-data") document.getElementById("importFile").click();
   else if (action === "mark-known") {
     const spec = id;
     for (const key of Object.keys(state.stats)) {
@@ -1133,6 +1452,13 @@ app.addEventListener("click", (e) => {
     state.stats = {};
     try { localStorage.removeItem(STATS_KEY); } catch {}
     render();
+  }
+});
+
+app.addEventListener("change", (e) => {
+  if (e.target.id === "importFile" && e.target.files && e.target.files[0]) {
+    importData(e.target.files[0]);
+    e.target.value = "";
   }
 });
 

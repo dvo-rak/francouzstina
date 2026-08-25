@@ -6,7 +6,7 @@ Aplikace na procvičování francouzštiny (příprava na DELF B1/B2). Běží p
 
 Na telefonu si ji přidej na plochu (Safari: sdílet → *Přidat na plochu*, Chrome: ⋮ → *Přidat na plochu*) a chová se pak jako normální appka.
 
-Pokrývá úrovně **A1–B2** — přepínač úrovně řídí obsah celé appky (slovesa, časy, texty, dostupné režimy). Režimy: 🎲 Mix (všechny typy cvičení v jednom kole), časování (7 časů), passé composé × imparfait ve větách, slovíčka oběma směry, porozumění textu ve stylu DELF (A1–B2), čísla 0–100 (i poslechově), rody un/une. K tomu volitelné psaní odpovědí, chytré opakování podle chybovosti, francouzské předčítání a statistiky chyb.
+Pokrývá úrovně **A1–B2** — přepínač úrovně řídí obsah celé appky. Režimy: 🎲 Mix, 📅 plánované opakování (Leitner: krabičky 1–5, intervaly 1/3/7/14/30 dní), 🔁 moje chyby, časování (7 časů), gramatická doplňování (členy, zájmena, subjonctif…), passé composé × imparfait, slovíčka (slovesa i tematická zásoba), diktáty s vyhodnocením po slovech, porozumění textu ve stylu DELF, čísla 0–100 (i poslechově), rody un/une. K tomu denní cíl a série 🔥, volitelné psaní odpovědí, francouzské předčítání, statistiky chyb a záloha/obnova pokroku.
 
 📖 **Kompletní popis všech režimů a nastavení je přímo v aplikaci** — tlačítko **ℹ️ Nápověda** v menu. Tam je jediná udržovaná verze nápovědy (README ji záměrně neduplikuje).
 
