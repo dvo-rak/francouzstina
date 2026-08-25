@@ -245,7 +245,7 @@
 <script>
 "use strict";
 
-const APP_VERSION = "10 (2026-08-25)";
+const APP_VERSION = "11 (2026-08-25)";
 
 // ── Skládání tvarů ──────────────────────────────────────────
 const PRONOUNS = ["je", "tu", "il", "nous", "vous", "ils"];
@@ -255,14 +255,18 @@ const ALLER = ["vais", "vas", "va", "allons", "allez", "vont"];
 const IMP_END = ["ais", "ais", "ait", "ions", "iez", "aient"];
 const FS_END = ["ai", "as", "a", "ons", "ez", "ont"];
 const TENSES = [
-  { id: "present", label: "Présent" },
-  { id: "pc", label: "Passé composé" },
-  { id: "futur", label: "Futur proche" },
-  { id: "imp", label: "Imparfait" },
-  { id: "fs", label: "Futur simple" },
-  { id: "cond", label: "Conditionnel" },
-  { id: "subj", label: "Subjonctif" },
+  { id: "present", label: "Présent", lvl: "A1" },
+  { id: "futur", label: "Futur proche", lvl: "A1" },
+  { id: "pc", label: "Passé composé", lvl: "A2" },
+  { id: "imp", label: "Imparfait", lvl: "A2" },
+  { id: "fs", label: "Futur simple", lvl: "B1" },
+  { id: "cond", label: "Conditionnel", lvl: "B1" },
+  { id: "subj", label: "Subjonctif", lvl: "B2" },
 ];
+const LVL = { A1: 1, A2: 2, B1: 3, B2: 4 };
+const LEVELS = ["A1", "A2", "B1", "B2"];
+const lvlOk = (itemLvl, def) => LVL[itemLvl || def] <= LVL[state.level];
+const tensePreset = (level) => TENSES.filter((t) => LVL[t.lvl] <= LVL[level]).map((t) => t.id);
 const TENSE_LABEL = Object.fromEntries(TENSES.map((t) => [t.id, t.label]));
 
 const startsVowel = (w) => /^[aeiouhâêéèàû]/i.test(w);
@@ -349,7 +353,7 @@ const shuffle = (arr) => {
 const PRAISE = ["Très bien !", "Parfait !", "Bravo !", "Excellent !", "Super !"];
 const OOPS = ["Oh non…", "Presque !", "Pas tout à fait…", "Hmm…"];
 const MODE_LABEL = {
-  conj: "Časování", frcz: "FR → ČJ", czfr: "ČJ → FR",
+  mix: "Mix", conj: "Časování", frcz: "FR → ČJ", czfr: "ČJ → FR",
   sent: "PC × Imparfait", num: "Čísla", gen: "Rody", cete: "Čtení",
 };
 const GRP_LABEL = { all: "všechna", irr: "nepravidelná", reg: "pravidelná" };
@@ -458,13 +462,13 @@ function sampleWeighted(cands, idFn) {
 
 // ── Stav ────────────────────────────────────────────────────
 const DEFAULT_SETTINGS = {
+  level: "B1", // A1 | A2 | B1 | B2 — řídí obsah celé appky
   tenseIds: ["present", "pc", "futur"],
   grp: "all",
   sessionLen: 10,
   ans: "choice", // choice | text
   smart: true,
   sound: false,
-  textLevel: "all", // all | B1 | B2
 };
 const state = {
   screen: "menu", // menu | quiz | done | stats
@@ -482,29 +486,44 @@ const state = {
   cteQ: 0,       // čtení: index otázky v textu
   lastText: null,
 };
+// uložené časy ořež na aktuální úroveň; prázdné → preset úrovně
+state.tenseIds = state.tenseIds.filter((id) => {
+  const t = TENSES.find((x) => x.id === id);
+  return t && LVL[t.lvl] <= LVL[state.level];
+});
+if (!state.tenseIds.length) state.tenseIds = tensePreset(state.level);
+
 function saveSettings() {
   saveJSON(SETTINGS_KEY, {
-    tenseIds: state.tenseIds, grp: state.grp, sessionLen: state.sessionLen,
-    ans: state.ans, smart: state.smart, sound: state.sound, textLevel: state.textLevel,
+    level: state.level, tenseIds: state.tenseIds, grp: state.grp,
+    sessionLen: state.sessionLen, ans: state.ans, smart: state.smart, sound: state.sound,
   });
 }
 
 function getPool() {
   return VERBS.filter((v) =>
-    state.grp === "all" ? true : state.grp === "reg" ? v.grp === "reg" : v.grp !== "reg"
+    lvlOk(v.lvl, "B1") &&
+    (state.grp === "all" ? true : state.grp === "reg" ? v.grp === "reg" : v.grp !== "reg")
   );
 }
+const nounPool = () => NOUNS.filter((n) => lvlOk(n.lvl, "A2"));
+// režimy dostupné na dané úrovni (věty PC×imp až od A2, kde je PC)
+const mixModes = () => {
+  const m = ["conj", "conj", "conj", "frcz", "czfr", "num", "gen", "gen"];
+  if (LVL[state.level] >= LVL.A2) m.push("sent", "sent");
+  return m;
+};
 
 // ── Generování otázek ───────────────────────────────────────
 // q: { key, statId, prompt, big, sub, correct, options?, accepted?,
 //      answerType: "choice"|"text", prefix?, inputMode?, audio?, why?, sayAfter? }
 function makeQuestion() {
-  const mode = state.mode;
   const pool = getPool();
   const prevKey = state.q && state.q.key;
   const K = state.smart ? 6 : 1;
 
   for (let attempt = 0; attempt < 20; attempt++) {
+    const mode = state.mode === "mix" ? pick(mixModes()) : state.mode;
     if (mode === "conj") {
       const cands = Array.from({ length: K }, () => {
         const verb = pick(pool);
@@ -529,7 +548,7 @@ function makeQuestion() {
       } else {
         q.answerType = "choice";
         const set = new Set();
-        for (const t of TENSES) {
+        for (const t of TENSES.filter((t) => LVL[t.lvl] <= LVL[state.level])) {
           for (let p = 0; p < 6; p++) {
             const f = conjDisplay(c.verb, t.id, p);
             if (f !== correct) set.add(f);
@@ -621,7 +640,8 @@ function makeQuestion() {
         } else {
           q.answerType = "choice";
           const ds = new Set([n]);
-          while (ds.size < 4) ds.add(numDistractor(n));
+          for (let g = 0; ds.size < 4 && g < 50; g++) ds.add(numDistractor(n));
+          while (ds.size < 4) ds.add(rnd(101)); // pojistka: málo kandidátů (např. n=0)
           q.options = shuffle([...ds].map(String));
         }
         return q;
@@ -640,14 +660,16 @@ function makeQuestion() {
       } else {
         q.answerType = "choice";
         const ds = new Set([n]);
-        while (ds.size < 4) ds.add(numDistractor(n));
+        for (let g = 0; ds.size < 4 && g < 50; g++) ds.add(numDistractor(n));
+        while (ds.size < 4) ds.add(rnd(101)); // pojistka: málo kandidátů (např. n=0)
         q.options = shuffle([...ds].map(frNumber));
       }
       return q;
     }
 
     if (mode === "gen") {
-      const cands = Array.from({ length: K }, () => pick(NOUNS));
+      const nouns = nounPool();
+      const cands = Array.from({ length: K }, () => pick(nouns));
       const noun = sampleWeighted(cands, (x) => "g|" + x.n);
       const key = "g|" + noun.n;
       if (key === prevKey) continue;
@@ -684,9 +706,7 @@ function makeQuestion() {
 
 // výběr textu pro čtení (vážený chybovostí, bez okamžitého opakování)
 function pickText() {
-  let idxs = TEXTS.map((_, i) => i).filter(
-    (i) => state.textLevel === "all" || TEXTS[i].level === state.textLevel
-  );
+  let idxs = TEXTS.map((_, i) => i).filter((i) => lvlOk(TEXTS[i].level, "B1"));
   if (!idxs.length) idxs = TEXTS.map((_, i) => i);
   if (idxs.length > 1 && state.lastText !== null) {
     idxs = idxs.filter((i) => i !== state.lastText);
@@ -811,22 +831,19 @@ function renderMenu() {
   const pool = getPool();
   let html =
     '<h1 class="title">Mon cahier de français</h1>' +
-    '<p class="subtitle">procvičování francouzštiny · ' + pool.length + " sloves · " + NOUNS.length + " podst. jmen · v" + APP_VERSION + "</p>";
+    '<p class="subtitle">procvičování francouzštiny · úroveň ' + state.level + " · v" + APP_VERSION + "</p>";
 
-  html += '<div class="card"><span class="label">Slovesa</span>' +
+  html += '<div class="card"><span class="label">Úroveň</span>' +
+    chipRow(LEVELS.map((l) => ({ id: l, label: l })), (l) => state.level === l.id, "level") +
+    '<div style="height:14px"></div><span class="label">Slovesa (' + pool.length + ')</span>' +
     chipRow(
       [{ id: "all", label: "Všechna" }, { id: "irr", label: "Nepravidelná" }, { id: "reg", label: "Pravidelná" }],
       (g) => state.grp === g.id, "grp"
     ) +
     '<div style="height:14px"></div><span class="label">Časy (časování)</span>' +
-    chipRow(TENSES, (t) => state.tenseIds.includes(t.id), "tense") +
+    chipRow(TENSES.filter((t) => LVL[t.lvl] <= LVL[state.level]), (t) => state.tenseIds.includes(t.id), "tense") +
     '<div style="height:14px"></div><span class="label">Počet otázek</span>' +
     chipRow(LENGTHS, (l) => state.sessionLen === l.id, "len") +
-    '<div style="height:14px"></div><span class="label">Úroveň textů (čtení)</span>' +
-    chipRow(
-      [{ id: "all", label: "Vše" }, { id: "B1", label: "B1" }, { id: "B2", label: "B2" }],
-      (l) => state.textLevel === l.id, "text-level"
-    ) +
     '<div style="height:14px"></div><span class="label">Další volby</span>' +
     chipRow(
       [
@@ -844,11 +861,12 @@ function renderMenu() {
     "</div>";
 
   html +=
+    '<button class="modeBtn" data-action="start" data-id="mix">🎲 Mix — všechno dohromady<small>časování, slovíčka, čísla, rody' + (LVL[state.level] >= LVL.A2 ? ", věty" : "") + " v jednom kole</small></button>" +
     '<button class="modeBtn" data-action="start" data-id="conj">Časování<small>nous + prendre → nous prenons</small></button>' +
-    '<button class="modeBtn" data-action="start" data-id="sent">Passé composé × imparfait<small>doplň správný čas do věty</small></button>' +
+    (LVL[state.level] >= LVL.A2 ? '<button class="modeBtn" data-action="start" data-id="sent">Passé composé × imparfait<small>doplň správný čas do věty</small></button>' : "") +
     '<button class="modeBtn" data-action="start" data-id="frcz">Slovíčka: francouzsky → česky<small>mettre → dát, položit</small></button>' +
     '<button class="modeBtn" data-action="start" data-id="czfr">Slovíčka: česky → francouzsky<small>slíbit → promettre</small></button>' +
-    '<button class="modeBtn" data-action="start" data-id="cete">Porozumění textu (DELF)<small>přečti text a odpověz na otázky · ' + TEXTS.length + " textů</small></button>" +
+    '<button class="modeBtn" data-action="start" data-id="cete">Porozumění textu (DELF)<small>přečti text a odpověz na otázky · ' + TEXTS.filter((t) => lvlOk(t.level, "B1")).length + " textů</small></button>" +
     '<button class="modeBtn" data-action="start" data-id="num">Čísla 0–100<small>42 → quarante-deux' + (TTS_OK ? " (se zvukem i poslech)" : "") + "</small></button>" +
     '<button class="modeBtn" data-action="start" data-id="gen">Rody: un / une<small>… problème? un!</small></button>' +
     '<button class="modeBtn" data-action="show-stats">📊 Statistiky chyb<small>co jde nejhůř a co procvičit</small></button>' +
@@ -1026,11 +1044,16 @@ function renderHelp() {
     '<h1 class="title">Nápověda</h1>' +
     '<p class="subtitle">co dělají jednotlivé režimy a volby</p>' +
 
+    '<div class="card helpCard"><span class="label">Úroveň (A1–B2)</span>' +
+    '<p>Přepínač úrovně úplně nahoře řídí obsah celé appky: která slovesa a podstatná jména se losují, které časy jsou v nabídce (présent a futur proche od A1, passé composé a imparfait od A2, futur simple a conditionnel od B1, subjonctif od B2), které texty na čtení se nabízejí a jestli je dostupný režim vět PC × imparfait (od A2). Při změně úrovně se časy přednastaví — pak si je můžeš doladit ručně.</p>' +
+    '</div>' +
+
     '<div class="card helpCard"><span class="label">Režimy</span>' +
+    '<p><b>🎲 Mix</b> — jedno kolo, ve kterém se střídají všechny typy cvičení tvé úrovně: časování, slovíčka oběma směry, čísla, rody a od A2 i věty PC × imparfait. Ideální jako každodenní rozcvička; chytré opakování funguje i tady.</p>' +
     '<p><b>Časování</b> — sloveso, osoba a čas; vybereš (nebo napíšeš) správný tvar. Které časy se procvičují, si zvolíš v nastavení.</p>' +
     '<p><b>Passé composé × imparfait</b> — věta s mezerou, vybíráš mezi dvěma tvary. Po odpovědi se ukáže, <i>proč</i> je správně zrovna tenhle čas (signální slova jako <i>tous les étés</i>, <i>soudain</i>, <i>d\'habitude</i>…).</p>' +
     '<p><b>Slovíčka</b> — překlad sloves oběma směry.</p>' +
-    '<p><b>Porozumění textu (DELF)</b> — krátký text (e-mail, inzerát, článek…) a 5 otázek francouzsky, jako u zkoušky. Text zůstává během otázek nahoře. Úroveň B1/B2 jde filtrovat v nastavení.</p>' +
+    '<p><b>Porozumění textu (DELF)</b> — krátký text (e-mail, inzerát, článek…) a otázky francouzsky, jako u zkoušky. Text zůstává během otázek nahoře. Nabízejí se texty do tvé úrovně včetně (na B2 tedy i B1 — u zkoušky nižší úroveň neuškodí).</p>' +
     '<p><b>Čísla 0–100</b> — číslo vybereš/napíšeš francouzsky. Se zapnutým zvukem je půlka otázek poslechová: slyšíš číslo a píšeš číslice.</p>' +
     '<p><b>Rody: un / une</b> — tipuješ rod podstatného jména. Vybraná jsou hlavně zrádná slova (<i>le problème, le musée, l\'eau — f!, le bonheur…</i>).</p>' +
     '</div>' +
@@ -1072,7 +1095,11 @@ app.addEventListener("click", (e) => {
   if (action === "grp") { state.grp = id; saveSettings(); render(); }
   else if (action === "tense") toggleTense(id);
   else if (action === "len") { state.sessionLen = Number(id); saveSettings(); render(); }
-  else if (action === "text-level") { state.textLevel = id; saveSettings(); render(); }
+  else if (action === "level") {
+    state.level = id;
+    state.tenseIds = tensePreset(id);
+    saveSettings(); render();
+  }
   else if (action === "read-text") speak(TEXTS[state.cteIdx].text);
   else if (action === "toggle") {
     if (id === "ans") state.ans = state.ans === "text" ? "choice" : "text";

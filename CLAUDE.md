@@ -33,13 +33,19 @@ vaty. Chyby přiznej rovnou. Přítelkyni se říká „QA".
   menu / quiz / done / stats / help. Render = skládání HTML stringů,
   jeden delegovaný click handler přes `data-action` atributy.
 - `data.js` — VŠECHNA data, načítá se `<script src>` před appkou:
-  - `VERBS` — slovesa: `{inf, cz, present[6], pp, aux: "avoir"|"etre", grp?: "reg"}`
-    (bez `grp` = nepravidelné). Présent bez zájmen, pořadí je/tu/il/nous/vous/ils.
+  - Úrovně: appka má globální přepínač A1/A2/B1/B2 (`state.level`), který
+    filtruje obsah přes `lvlOk()`. Datové položky mají volitelné `lvl`;
+    default: slovesa B1, podst. jména A2, texty B1. Časy mají úroveň
+    v `TENSES` (présent+futur proche A1, PC+imparfait A2, FS+cond B1,
+    subjonctif B2); změna úrovně přednastaví `tenseIds`. Režim `mix`
+    losuje podrežimy z `mixModes()` (věty `sent` až od A2).
+  - `VERBS` — slovesa: `{inf, lvl?, cz, present[6], pp, aux: "avoir"|"etre", grp?: "reg"}`
+    (bez `grp` = nepravidelné; bez `lvl` = B1). Présent bez zájmen, pořadí je/tu/il/nous/vous/ils.
   - `FUT_STEMS` — nepravidelné kmeny futur simple/conditionnel (jinak se
     odvozuje z infinitivu; -re slovesa bez koncového e).
   - `SUBJ_FORMS` — úplně nepravidelný subjonctif (être, avoir, faire, pouvoir,
     savoir, aller, vouloir); ostatní se odvozuje z ils-tvaru a nous-tvaru.
-  - `NOUNS` — rody: `{n, g: "m"|"f", cz}`. Vybírej zrádná slova.
+  - `NOUNS` — rody: `{n, lvl?, g: "m"|"f", cz}` (bez `lvl` = A2). Vybírej zrádná slova.
   - `SENTENCES` — věty PC×imparfait: `{s (s ___), inf, p (0–5), t: "imp"|"pc", why}`.
     POZOR: obě varianty (imp i pc tvar) musí gramaticky pasovat do mezery —
     žádné „je ___", kde by tvar začínal samohláskou (elize j').
@@ -94,6 +100,9 @@ Merge do polí v data.js: pozor na `},` + `,` → `,,` = undefined prvek v poli
   getVoices() se někdy naplní až po prvním přehrání.
 - Čeština v datech: uvozovky „…“ (U+201E/U+201C), nikdy ASCII " uvnitř
   JS stringů.
+- Generátory distraktorů s `while (set.size < N)` musí mít pojistku proti
+  vyčerpání kandidátů (číslo 0 mělo jen 2 → zamrzlý tab; opraveno guardem
+  + náhodným doplněním).
 
 ## Čeho se držet
 
