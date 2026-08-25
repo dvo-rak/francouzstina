@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mon cahier de français</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: 'Source Serif 4', Georgia, serif;
+    color: #1c2a4a;
+    /* sešitový papír Seyès: světle modré linky + červený okraj */
+    background-color: #fdfcf7;
+    background-image:
+      linear-gradient(90deg, transparent 0, transparent 44px, #e8637c 44px, #e8637c 45.5px, transparent 45.5px),
+      repeating-linear-gradient(#fdfcf7 0, #fdfcf7 30px, #c3d6ee 30px, #c3d6ee 31px);
+    display: flex;
+    justify-content: center;
+    padding: 24px 12px 48px;
+  }
+  .page { width: 100%; max-width: 480px; }
+
+  .title {
+    font-family: 'Caveat', cursive;
+    font-size: 2.6rem;
+    font-weight: 700;
+    color: #17356e;
+    margin: 0;
+    line-height: 1.1;
+  }
+  .subtitle { color: #5a6b8c; margin: 2px 0 26px; font-size: 0.95rem; }
+
+  .card {
+    background: #ffffff;
+    border: 1px solid #d8dce6;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(23, 53, 110, 0.07);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .modeBtn {
+    display: block; width: 100%;
+    text-align: left;
+    background: #ffffff;
+    border: 1.5px solid #b9c6de;
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+    font-family: inherit;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #17356e;
+    cursor: pointer;
+    transition: border-color .12s, transform .12s;
+  }
+  .modeBtn:hover { border-color: #17356e; }
+  .modeBtn:active { transform: scale(0.985); }
+  .modeBtn small { display: block; font-weight: 400; color: #5a6b8c; margin-top: 3px; }
+
+  .chipRow { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .chip {
+    border-radius: 999px;
+    border: 1.5px solid #b9c6de;
+    background: #fff;
+    color: #5a6b8c;
+    padding: 7px 14px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+  .chip.on { background: #17356e; border-color: #17356e; color: #fff; }
+  .label { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.08em; color: #5a6b8c; }
+
+  .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .back {
+    background: none; border: none; font-family: inherit;
+    color: #17356e; font-size: 0.95rem; cursor: pointer; padding: 6px 0;
+    text-decoration: underline; text-underline-offset: 3px;
+  }
+  .scorebox { font-size: 0.9rem; color: #5a6b8c; text-align: right; }
+  .scorebox b { color: #17356e; }
+  .streak { color: #b8302f; font-weight: 700; }
+
+  .qPrompt { color: #5a6b8c; font-size: 0.95rem; margin: 0; }
+  .qBig {
+    font-size: 2rem; font-weight: 700; color: #17356e;
+    margin: 6px 0 2px;
+  }
+  .qSub { color: #8391ad; font-size: 0.88rem; margin: 0 0 6px; }
+
+  .opt {
+    display: block; width: 100%;
+    background: #fff;
+    border: 1.5px solid #b9c6de;
+    border-radius: 10px;
+    padding: 15px 16px;
+    margin-top: 10px;
+    font-family: inherit;
+    font-size: 1.1rem;
+    color: #1c2a4a;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color .12s, background .12s;
+  }
+  .opt:not(:disabled):hover { border-color: #17356e; }
+  .opt:disabled { cursor: default; }
+  .opt.good { border-color: #2e7d4f; background: #eef7f0; font-weight: 700; }
+  .opt.bad { border-color: #b8302f; background: #fbeeee; text-decoration: line-through; }
+  .opt.dim { opacity: 0.5; }
+
+  .stamp {
+    font-family: 'Caveat', cursive;
+    font-size: 1.9rem;
+    font-weight: 700;
+    transform: rotate(-3deg);
+    display: inline-block;
+    margin-top: 14px;
+  }
+  .stamp.ok { color: #2e7d4f; }
+  .stamp.ko { color: #b8302f; }
+  .correction {
+    font-family: 'Caveat', cursive;
+    font-size: 1.5rem;
+    color: #b8302f;
+    margin: 2px 0 0;
+  }
+
+  .nextBtn {
+    width: 100%;
+    margin-top: 16px;
+    background: #17356e;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 15px;
+    font-family: inherit;
+    font-size: 1.05rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .nextBtn:active { transform: scale(0.985); }
+
+  .histHead { display: flex; justify-content: space-between; align-items: baseline; }
+  .histClear {
+    background: none; border: none; font-family: inherit;
+    color: #8391ad; font-size: 0.8rem; cursor: pointer;
+    text-decoration: underline; text-underline-offset: 2px;
+  }
+  .histRow {
+    display: flex; justify-content: space-between; gap: 8px;
+    padding: 8px 0; border-bottom: 1px dashed #e2e7f0;
+    font-size: 0.88rem;
+  }
+  .histRow:last-child { border-bottom: none; }
+  .histDate { color: #8391ad; white-space: nowrap; }
+  .histMode { color: #5a6b8c; flex: 1; text-align: left; }
+  .histScore { font-weight: 600; color: #17356e; white-space: nowrap; }
+  .histScore.hi { color: #2e7d4f; }
+  .histScore.lo { color: #b8302f; }
+
+  .doneCard { text-align: center; padding: 32px 20px; }
+  .doneStamp {
+    font-family: 'Caveat', cursive;
+    font-size: 2.8rem; font-weight: 700;
+    color: #b8302f; transform: rotate(-3deg);
+  }
+  .doneScore { font-size: 2.4rem; font-weight: 700; color: #17356e; margin-top: 10px; }
+  .donePct { color: #5a6b8c; margin-top: 2px; }
+  .doneMeta { color: #8391ad; font-size: 0.88rem; margin: 6px 0 20px; }
+  .doneMenuBtn { text-align: center; margin-top: 10px; margin-bottom: 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="page" id="app"></div>
+
+<script src="data.js"></script>
+<script>
+"use strict";
+
+// ── Skládání tvarů ──────────────────────────────────────────
+const PRONOUNS = ["je", "tu", "il", "nous", "vous", "ils"];
+const AVOIR = ["ai", "as", "a", "avons", "avez", "ont"];
+const ETRE = ["suis", "es", "est", "sommes", "êtes", "sont"];
+const ALLER = ["vais", "vas", "va", "allons", "allez", "vont"];
+const TENSES = [
+  { id: "present", label: "Présent" },
+  { id: "pc", label: "Passé composé" },
+  { id: "futur", label: "Futur proche" },
+];
+
+const startsVowel = (w) => /^[aeiouhâêéèàû]/i.test(w);
+const joinPronoun = (i, rest) =>
+  i === 0 && startsVowel(rest) ? "j'" + rest : PRONOUNS[i] + " " + rest;
+
+function conjugate(verb, tenseId, i) {
+  if (tenseId === "present") return joinPronoun(i, verb.present[i]);
+  if (tenseId === "futur") return joinPronoun(i, ALLER[i] + " " + verb.inf);
+  if (verb.aux === "etre") {
+    const pp = verb.pp + (i >= 3 ? "s" : "");
+    return joinPronoun(i, ETRE[i] + " " + pp);
+  }
+  return joinPronoun(i, AVOIR[i] + " " + verb.pp);
+}
+
+// ── Pomocné ─────────────────────────────────────────────────
+const rnd = (n) => Math.floor(Math.random() * n);
+const pick = (arr) => arr[rnd(arr.length)];
+const shuffle = (arr) => {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = rnd(i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
+
+const PRAISE = ["Très bien !", "Parfait !", "Bravo !", "Excellent !", "Super !"];
+const OOPS = ["Oh non…", "Presque !", "Pas tout à fait…", "Hmm…"];
+const MODE_LABEL = { conj: "Časování", frcz: "FR → ČJ", czfr: "ČJ → FR" };
+const GRP_LABEL = { all: "všechna", irr: "nepravidelná", reg: "pravidelná" };
+const LENGTHS = [
+  { id: 10, label: "10" },
+  { id: 25, label: "25" },
+  { id: 50, label: "50" },
+  { id: 0, label: "∞" },
+];
+const fmtDate = (ts) =>
+  new Date(ts).toLocaleString("cs-CZ", {
+    day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+
+// ── Historie (localStorage) ─────────────────────────────────
+const HIST_KEY = "fr-cahier-history";
+function loadHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(HIST_KEY)) || [];
+  } catch { return []; }
+}
+function saveHistory(h) {
+  try { localStorage.setItem(HIST_KEY, JSON.stringify(h)); } catch {}
+}
+
+// ── Generování otázek ───────────────────────────────────────
+function makeQuestion(mode, tenseIds, prevKey, pool) {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const verb = pick(pool);
+
+    if (mode === "conj") {
+      const tense = pick(tenseIds);
+      const i = rnd(6);
+      const key = "c|" + verb.inf + "|" + tense + "|" + i;
+      if (key === prevKey) continue;
+      const correct = conjugate(verb, tense, i);
+      const poolSet = new Set();
+      for (const t of ["present", "pc", "futur"]) {
+        for (let p = 0; p < 6; p++) {
+          const f = conjugate(verb, t, p);
+          if (f !== correct) poolSet.add(f);
+        }
+      }
+      const options = shuffle([correct, ...shuffle([...poolSet]).slice(0, 3)]);
+      const tenseLabel = TENSES.find((t) => t.id === tense).label;
+      return {
+        key,
+        prompt: verb.inf,
+        sub: verb.cz + " · " + tenseLabel,
+        big: PRONOUNS[i] + " … ?",
+        correct,
+        options,
+      };
+    }
+
+    if (mode === "frcz") {
+      const key = "f|" + verb.inf;
+      if (key === prevKey) continue;
+      const others = shuffle(pool.filter((v) => v.inf !== verb.inf)).slice(0, 3);
+      return {
+        key,
+        prompt: "Co znamená…",
+        sub: "vyber český význam",
+        big: verb.inf,
+        correct: verb.cz,
+        options: shuffle([verb.cz, ...others.map((v) => v.cz)]),
+      };
+    }
+
+    const key = "z|" + verb.inf;
+    if (key === prevKey) continue;
+    const others = shuffle(pool.filter((v) => v.inf !== verb.inf)).slice(0, 3);
+    return {
+      key,
+      prompt: "Jak se řekne…",
+      sub: "vyber francouzské sloveso",
+      big: verb.cz,
+      correct: verb.inf,
+      options: shuffle([verb.inf, ...others.map((v) => v.inf)]),
+    };
+  }
+  return null;
+}
+
+// ── Stav ────────────────────────────────────────────────────
+const state = {
+  screen: "menu", // menu | quiz | done
+  mode: "conj",
+  tenseIds: ["present", "pc", "futur"],
+  grp: "all", // all | irr | reg
+  sessionLen: 10, // 0 = nekonečno
+  q: null,
+  picked: null,
+  stamp: "",
+  score: { ok: 0, total: 0, streak: 0 },
+  history: loadHistory(),
+};
+
+function getPool() {
+  return VERBS.filter((v) =>
+    state.grp === "all" ? true : state.grp === "reg" ? v.grp === "reg" : v.grp !== "reg"
+  );
+}
+
+// ── Akce ────────────────────────────────────────────────────
+function start(mode) {
+  state.mode = mode;
+  state.score = { ok: 0, total: 0, streak: 0 };
+  state.q = makeQuestion(mode, state.tenseIds, null, getPool());
+  state.picked = null;
+  state.screen = "quiz";
+  render();
+}
+
+function answer(opt) {
+  if (state.picked !== null) return;
+  state.picked = opt;
+  const ok = opt === state.q.correct;
+  state.stamp = ok ? pick(PRAISE) : pick(OOPS);
+  state.score.ok += ok ? 1 : 0;
+  state.score.total += 1;
+  state.score.streak = ok ? state.score.streak + 1 : 0;
+  render();
+}
+
+function next() {
+  if (state.sessionLen > 0 && state.score.total >= state.sessionLen) {
+    finish();
+    return;
+  }
+  state.q = makeQuestion(state.mode, state.tenseIds, state.q && state.q.key, getPool());
+  state.picked = null;
+  render();
+}
+
+function finish() {
+  if (state.score.total > 0) {
+    const entry = {
+      d: Date.now(), m: state.mode, g: state.grp,
+      ok: state.score.ok, t: state.score.total,
+    };
+    state.history = [entry, ...state.history].slice(0, 30);
+    saveHistory(state.history);
+    state.screen = "done";
+  } else {
+    state.screen = "menu";
+  }
+  render();
+}
+
+function toggleTense(id) {
+  const cur = state.tenseIds;
+  if (cur.includes(id)) {
+    if (cur.length > 1) state.tenseIds = cur.filter((t) => t !== id);
+  } else {
+    state.tenseIds = [...cur, id];
+  }
+  render();
+}
+
+function clearHistory() {
+  state.history = [];
+  try { localStorage.removeItem(HIST_KEY); } catch {}
+  render();
+}
+
+// ── Render ──────────────────────────────────────────────────
+const app = document.getElementById("app");
+const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+function chipRow(items, isOn, action) {
+  return '<div class="chipRow">' + items.map((it) =>
+    '<button class="chip' + (isOn(it) ? " on" : "") + '" data-action="' + action + '" data-id="' + esc(it.id) + '">' + esc(it.label) + "</button>"
+  ).join("") + "</div>";
+}
+
+function renderMenu() {
+  const pool = getPool();
+  let html =
+    '<h1 class="title">Mon cahier de français</h1>' +
+    '<p class="subtitle">procvičování sloves · ' + pool.length + " sloves</p>";
+
+  html += '<div class="card"><span class="label">Slovesa</span>' +
+    chipRow(
+      [{ id: "all", label: "Všechna" }, { id: "irr", label: "Nepravidelná" }, { id: "reg", label: "Pravidelná" }],
+      (g) => state.grp === g.id, "grp"
+    ) + "</div>";
+
+  html += '<div class="card"><span class="label">Časy (pro režim časování)</span>' +
+    chipRow(TENSES, (t) => state.tenseIds.includes(t.id), "tense") + "</div>";
+
+  html += '<div class="card"><span class="label">Počet otázek</span>' +
+    chipRow(LENGTHS, (l) => state.sessionLen === l.id, "len") + "</div>";
+
+  html +=
+    '<button class="modeBtn" data-action="start" data-id="conj">Časování<small>nous + prendre → nous prenons</small></button>' +
+    '<button class="modeBtn" data-action="start" data-id="frcz">Slovíčka: francouzsky → česky<small>mettre → dát, položit</small></button>' +
+    '<button class="modeBtn" data-action="start" data-id="czfr">Slovíčka: česky → francouzsky<small>slíbit → promettre</small></button>';
+
+  if (state.history.length > 0) {
+    html += '<div class="card"><div class="histHead"><span class="label">Historie</span>' +
+      '<button class="histClear" data-action="clear-history">smazat</button></div>';
+    for (const h of state.history.slice(0, 8)) {
+      const p = Math.round((100 * h.ok) / h.t);
+      const cls = p >= 80 ? " hi" : p < 50 ? " lo" : "";
+      html += '<div class="histRow"><span class="histDate">' + fmtDate(h.d) + "</span>" +
+        '<span class="histMode">' + MODE_LABEL[h.m] + " · " + GRP_LABEL[h.g] + "</span>" +
+        '<span class="histScore' + cls + '">' + h.ok + "/" + h.t + " · " + p + " %</span></div>";
+    }
+    html += "</div>";
+  }
+  return html;
+}
+
+function renderQuiz() {
+  const s = state.score;
+  const q = state.q;
+  let progress = "";
+  if (state.sessionLen > 0) {
+    const cur = Math.min(s.total + (state.picked === null ? 1 : 0), state.sessionLen);
+    progress = cur + " / " + state.sessionLen + " · ";
+  }
+  let html =
+    '<div class="topbar">' +
+    '<button class="back" data-action="finish">' + (s.total > 0 ? "← ukončit" : "← menu") + "</button>" +
+    '<div class="scorebox">' + progress + "<b>" + s.ok + "</b> správně" +
+    (s.streak >= 3 ? ' · <span class="streak">🔥 ' + s.streak + "</span>" : "") +
+    "</div></div>";
+
+  html += '<div class="card">' +
+    '<p class="qPrompt">' + esc(q.prompt) + "</p>" +
+    '<p class="qBig">' + esc(q.big) + "</p>" +
+    '<p class="qSub">' + esc(q.sub) + "</p>";
+
+  q.options.forEach((opt, idx) => {
+    let cls = "opt";
+    if (state.picked !== null) {
+      if (opt === q.correct) cls += " good";
+      else if (opt === state.picked) cls += " bad";
+      else cls += " dim";
+    }
+    html += '<button class="' + cls + '" data-action="answer" data-id="' + idx + '"' +
+      (state.picked !== null ? " disabled" : "") + ">" + esc(opt) + "</button>";
+  });
+
+  if (state.picked !== null) {
+    const ok = state.picked === q.correct;
+    html += '<div class="stamp ' + (ok ? "ok" : "ko") + '">' + esc(state.stamp) + "</div>";
+    if (!ok) html += '<p class="correction">→ ' + esc(q.correct) + "</p>";
+    const last = state.sessionLen > 0 && s.total >= state.sessionLen;
+    html += '<button class="nextBtn" data-action="next">' + (last ? "Výsledek →" : "Další →") + "</button>";
+  }
+  html += "</div>";
+  return html;
+}
+
+function renderDone() {
+  const s = state.score;
+  const pct = Math.round((100 * s.ok) / s.total);
+  const grade = pct >= 90 ? "Excellent !" : pct >= 70 ? "Très bien !" : pct >= 50 ? "Pas mal !" : "On continue !";
+  return '<div class="card doneCard">' +
+    '<div class="doneStamp">' + grade + "</div>" +
+    '<div class="doneScore">' + s.ok + " / " + s.total + "</div>" +
+    '<div class="donePct">' + pct + " % správně</div>" +
+    '<div class="doneMeta">' + MODE_LABEL[state.mode] + " · " + GRP_LABEL[state.grp] + " slovesa</div>" +
+    '<button class="nextBtn" data-action="encore">Encore ! (ještě jednou)</button>' +
+    '<button class="modeBtn doneMenuBtn" data-action="menu">Zpět do menu</button>' +
+    "</div>";
+}
+
+function render() {
+  if (state.screen === "menu") app.innerHTML = renderMenu();
+  else if (state.screen === "quiz") app.innerHTML = renderQuiz();
+  else app.innerHTML = renderDone();
+}
+
+app.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-action]");
+  if (!btn) return;
+  const action = btn.dataset.action;
+  const id = btn.dataset.id;
+  if (action === "grp") { state.grp = id; render(); }
+  else if (action === "tense") toggleTense(id);
+  else if (action === "len") { state.sessionLen = Number(id); render(); }
+  else if (action === "start") start(id);
+  else if (action === "answer") answer(state.q.options[Number(id)]);
+  else if (action === "next") next();
+  else if (action === "finish") finish();
+  else if (action === "encore") start(state.mode);
+  else if (action === "menu") { state.screen = "menu"; render(); }
+  else if (action === "clear-history") clearHistory();
+});
+
+render();
+</script>
+</body>
+</html>
