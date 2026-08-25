@@ -30,7 +30,7 @@ Na telefonu si ji můžeš přidat na plochu (Safari: sdílet → *Přidat na pl
 
 **🧠 chytré opakování** — appka si (jen v tomhle prohlížeči) počítá, kde děláš chyby, a tyhle věci ti pak **nabízí častěji**. Konkrétně: při výběru další otázky se vylosuje několik kandidátů a přednost dostane ten s horší úspěšností. Nic víc v tom není — žádné plánování na dny dopředu jako Anki, prostě „co ti nejde, chodí častěji". Když to vypneš, losuje se čistě náhodně.
 
-**🔊 zvuk** — francouzské předčítání vestavěným hlasem prohlížeče: slovíčka, čísla (včetně poslechových otázek), po odpovědi celé věty a *un/une + slovo*, u textů tlačítko „přečíst". Pokud slyšíš angličtinu, chybí v zařízení francouzský hlas — na iPhonu: Nastavení → Zpřístupnění → Předčítání obsahu → Hlasy → Francouzština; na Androidu: nastavení Google TTS.
+**🔊 zvuk** — francouzské předčítání vestavěným hlasem prohlížeče: slovíčka, čísla (včetně poslechových otázek), po odpovědi celé věty a *un/une + slovo*, u textů tlačítko „přečíst". Pokud slyšíš angličtinu, chybí v zařízení francouzský hlas — na iPhonu: Nastavení → Zpřístupnění → Předčítání obsahu → Hlasy → Francouzština; na Androidu: nastavení Google TTS; na Windows: Nastavení → Čas a jazyk → Řeč → Přidat hlasy → Français (a pak restartovat prohlížeč). Se zapnutým zvukem se v nastavení appky zobrazuje, jaký hlas se reálně používá.
 
 ## 📊 Statistiky chyb
 
