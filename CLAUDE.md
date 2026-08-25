@@ -47,8 +47,9 @@ vaty. Chyby přiznej rovnou. Přítelkyni se říká „QA".
     `c` musí být PŘESNÝ řetězec z `o`. Vrai/Faux vždy v pořadí ["Vrai","Faux"]
     (appka je nemíchá). Otázky francouzsky, `why` česky u chytáků.
 - `deploy.sh` — nasazení s verzováním (viz Workflow).
-- `README.md` — pro uživatelku; sekce o zvuku/nápovědě je ZDVOJENÁ v in-app
-  nápovědě (`renderHelp()` v index.html) — při změně aktualizuj obě.
+- `README.md` — jen úvod + sekce pro správce. Uživatelská nápověda žije
+  VÝHRADNĚ v appce (`renderHelp()` v index.html) — README ji záměrně
+  neduplikuje, aby nebylo co zapomenout synchronizovat.
 
 ## Odvozování tvarů (index.html)
 
