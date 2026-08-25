@@ -372,12 +372,30 @@ function matchTyped(input, accepted) {
 
 // ── Zvuk (Web Speech API) ───────────────────────────────────
 const TTS_OK = "speechSynthesis" in window;
+// u.lang samo o sobě řada prohlížečů ignoruje a čte výchozím
+// (anglickým) hlasem — je nutné explicitně vybrat francouzský
+// hlas z getVoices(). Seznam se navíc načítá asynchronně.
+let frVoice = null;
+function pickFrVoice() {
+  if (!TTS_OK) return;
+  const vs = speechSynthesis.getVoices();
+  frVoice =
+    vs.find((v) => /^fr[-_]FR/i.test(v.lang)) ||
+    vs.find((v) => /^fr/i.test(v.lang)) ||
+    null;
+}
+if (TTS_OK) {
+  pickFrVoice();
+  speechSynthesis.onvoiceschanged = pickFrVoice;
+}
 function speak(text) {
   if (!TTS_OK) return;
   try {
+    if (!frVoice) pickFrVoice(); // hlasy se mohly načíst později
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = "fr-FR";
+    if (frVoice) u.voice = frVoice;
+    u.lang = frVoice ? frVoice.lang : "fr-FR";
     u.rate = 0.85;
     speechSynthesis.speak(u);
   } catch {}
