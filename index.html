@@ -14,7 +14,6 @@
     min-height: 100vh;
     font-family: 'Source Serif 4', Georgia, serif;
     color: #1c2a4a;
-    /* sešitový papír Seyès: světle modré linky + červený okraj */
     background-color: #fdfcf7;
     background-image:
       linear-gradient(90deg, transparent 0, transparent 44px, #e8637c 44px, #e8637c 45.5px, transparent 45.5px),
@@ -76,6 +75,7 @@
   }
   .chip.on { background: #17356e; border-color: #17356e; color: #fff; }
   .label { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.08em; color: #5a6b8c; }
+  .labelRow { display: flex; justify-content: space-between; align-items: baseline; }
 
   .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
   .back {
@@ -89,9 +89,10 @@
 
   .qPrompt { color: #5a6b8c; font-size: 0.95rem; margin: 0; }
   .qBig {
-    font-size: 2rem; font-weight: 700; color: #17356e;
-    margin: 6px 0 2px;
+    font-size: 1.9rem; font-weight: 700; color: #17356e;
+    margin: 6px 0 2px; line-height: 1.25;
   }
+  .qBig.sentence { font-size: 1.3rem; font-weight: 600; }
   .qSub { color: #8391ad; font-size: 0.88rem; margin: 0 0 6px; }
 
   .opt {
@@ -114,6 +115,34 @@
   .opt.bad { border-color: #b8302f; background: #fbeeee; text-decoration: line-through; }
   .opt.dim { opacity: 0.5; }
 
+  .typeRow { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
+  .typePrefix { font-size: 1.1rem; color: #17356e; font-weight: 600; white-space: nowrap; }
+  .typeInput {
+    flex: 1; min-width: 0;
+    font-family: inherit; font-size: 1.1rem;
+    padding: 12px 14px;
+    border: 1.5px solid #b9c6de; border-radius: 10px;
+    color: #1c2a4a; background: #fff;
+  }
+  .typeInput:focus { outline: none; border-color: #17356e; }
+  .typeOk {
+    background: #17356e; color: #fff; border: none; border-radius: 10px;
+    padding: 12px 18px; font-family: inherit; font-size: 1rem; font-weight: 600;
+    cursor: pointer;
+  }
+  .typedAnswer { margin-top: 12px; font-size: 1.1rem; }
+  .typedAnswer .wrong { color: #b8302f; text-decoration: line-through; }
+  .accentNote {
+    font-family: 'Caveat', cursive; font-size: 1.3rem;
+    color: #c07d1a; margin: 4px 0 0;
+  }
+
+  .speakBtn {
+    background: #fff; border: 1.5px solid #b9c6de; border-radius: 10px;
+    font-size: 1.6rem; padding: 10px 22px; cursor: pointer; margin-top: 6px;
+  }
+  .speakBtn:hover { border-color: #17356e; }
+
   .stamp {
     font-family: 'Caveat', cursive;
     font-size: 1.9rem;
@@ -129,6 +158,13 @@
     font-size: 1.5rem;
     color: #b8302f;
     margin: 2px 0 0;
+  }
+  .why { color: #5a6b8c; font-size: 0.92rem; margin: 8px 0 0; font-style: italic; }
+
+  .textCard { max-height: 280px; overflow-y: auto; padding: 16px 18px; }
+  .readText {
+    font-size: 0.97rem; line-height: 1.6; color: #1c2a4a;
+    margin: 10px 0 0; text-align: justify; hyphens: auto;
   }
 
   .nextBtn {
@@ -164,6 +200,24 @@
   .histScore.hi { color: #2e7d4f; }
   .histScore.lo { color: #b8302f; }
 
+  .statRow {
+    display: flex; justify-content: space-between; gap: 8px;
+    padding: 7px 0; border-bottom: 1px dashed #e2e7f0; font-size: 0.92rem;
+  }
+  .statRow:last-child { border-bottom: none; }
+  .statName { color: #1c2a4a; }
+  .statVal { font-weight: 600; white-space: nowrap; }
+  .statVal.hi { color: #2e7d4f; }
+  .statVal.lo { color: #b8302f; }
+  .statEmpty { color: #8391ad; font-size: 0.92rem; margin: 8px 0 0; }
+  .statNote { color: #8391ad; font-size: 0.85rem; margin-top: 12px; }
+  .knowBtn {
+    background: #fff; border: 1.5px solid #b9c6de; border-radius: 999px;
+    color: #2e7d4f; font-family: inherit; font-size: 0.78rem;
+    padding: 3px 10px; margin-left: 8px; cursor: pointer; vertical-align: middle;
+  }
+  .knowBtn:hover { border-color: #2e7d4f; }
+
   .doneCard { text-align: center; padding: 32px 20px; }
   .doneStamp {
     font-family: 'Caveat', cursive;
@@ -192,24 +246,86 @@ const PRONOUNS = ["je", "tu", "il", "nous", "vous", "ils"];
 const AVOIR = ["ai", "as", "a", "avons", "avez", "ont"];
 const ETRE = ["suis", "es", "est", "sommes", "êtes", "sont"];
 const ALLER = ["vais", "vas", "va", "allons", "allez", "vont"];
+const IMP_END = ["ais", "ais", "ait", "ions", "iez", "aient"];
+const FS_END = ["ai", "as", "a", "ons", "ez", "ont"];
 const TENSES = [
   { id: "present", label: "Présent" },
   { id: "pc", label: "Passé composé" },
   { id: "futur", label: "Futur proche" },
+  { id: "imp", label: "Imparfait" },
+  { id: "fs", label: "Futur simple" },
+  { id: "cond", label: "Conditionnel" },
+  { id: "subj", label: "Subjonctif" },
 ];
+const TENSE_LABEL = Object.fromEntries(TENSES.map((t) => [t.id, t.label]));
 
 const startsVowel = (w) => /^[aeiouhâêéèàû]/i.test(w);
 const joinPronoun = (i, rest) =>
   i === 0 && startsVowel(rest) ? "j'" + rest : PRONOUNS[i] + " " + rest;
 
-function conjugate(verb, tenseId, i) {
-  if (tenseId === "present") return joinPronoun(i, verb.present[i]);
-  if (tenseId === "futur") return joinPronoun(i, ALLER[i] + " " + verb.inf);
-  if (verb.aux === "etre") {
-    const pp = verb.pp + (i >= 3 ? "s" : "");
-    return joinPronoun(i, ETRE[i] + " " + pp);
+// kmen imparfait/subjonctivu (nous-tvar bez -ons), s pravopisnou
+// úpravou před koncovkami na -i (mangions, commencions)
+const nousStem = (verb) => (verb.inf === "être" ? "ét" : verb.present[3].replace(/ons$/, ""));
+const iAdjust = (stem) =>
+  stem.endsWith("ge") ? stem.slice(0, -1) : stem.endsWith("ç") ? stem.slice(0, -1) + "c" : stem;
+const futStem = (verb) =>
+  FUT_STEMS[verb.inf] || (verb.inf.endsWith("re") ? verb.inf.slice(0, -1) : verb.inf);
+
+// tvar bez zájmena
+function conjBare(verb, tenseId, i) {
+  if (tenseId === "present") return verb.present[i];
+  if (tenseId === "futur") return ALLER[i] + " " + verb.inf;
+  if (tenseId === "pc") {
+    if (verb.aux === "etre") return ETRE[i] + " " + verb.pp + (i >= 3 ? "s" : "");
+    return AVOIR[i] + " " + verb.pp;
   }
-  return joinPronoun(i, AVOIR[i] + " " + verb.pp);
+  if (tenseId === "imp") {
+    const e = IMP_END[i];
+    const st = e.startsWith("i") ? iAdjust(nousStem(verb)) : nousStem(verb);
+    return st + e;
+  }
+  if (tenseId === "fs") return futStem(verb) + FS_END[i];
+  if (tenseId === "cond") return futStem(verb) + IMP_END[i];
+  // subjonctif
+  if (SUBJ_FORMS[verb.inf]) return SUBJ_FORMS[verb.inf][i];
+  const s1 = verb.present[5].replace(/ent$/, "");
+  if (i === 3 || i === 4) return iAdjust(nousStem(verb)) + (i === 3 ? "ions" : "iez");
+  return s1 + ["e", "es", "e", , , "ent"][i];
+}
+
+// tvar se zájmenem (subjonctif s "que")
+function conjDisplay(verb, tenseId, i) {
+  const base = joinPronoun(i, conjBare(verb, tenseId, i));
+  if (tenseId !== "subj") return base;
+  return (base.startsWith("il") ? "qu'" : "que ") + base;
+}
+
+// prefix pro psací režim (zájmeno, u subj s "que")
+function typePrefix(tenseId, i) {
+  const p = PRONOUNS[i];
+  if (tenseId !== "subj") return p;
+  return (p === "il" || p === "ils" ? "qu'" : "que ") + p;
+}
+
+// ── Čísla 0–100 ─────────────────────────────────────────────
+const NUM_UNITS = ["zéro","un","deux","trois","quatre","cinq","six","sept","huit","neuf","dix",
+  "onze","douze","treize","quatorze","quinze","seize","dix-sept","dix-huit","dix-neuf"];
+const NUM_TENS = { 20: "vingt", 30: "trente", 40: "quarante", 50: "cinquante", 60: "soixante" };
+function frNumber(n) {
+  if (n === 100) return "cent";
+  if (n < 20) return NUM_UNITS[n];
+  if (n >= 80) {
+    if (n === 80) return "quatre-vingts";
+    return "quatre-vingt-" + NUM_UNITS[n - 80];
+  }
+  if (n >= 70) {
+    if (n === 71) return "soixante et onze";
+    return "soixante-" + NUM_UNITS[n - 60];
+  }
+  const t = Math.floor(n / 10) * 10, u = n % 10;
+  if (u === 0) return NUM_TENS[t];
+  if (u === 1) return NUM_TENS[t] + " et un";
+  return NUM_TENS[t] + "-" + NUM_UNITS[u];
 }
 
 // ── Pomocné ─────────────────────────────────────────────────
@@ -226,102 +342,115 @@ const shuffle = (arr) => {
 
 const PRAISE = ["Très bien !", "Parfait !", "Bravo !", "Excellent !", "Super !"];
 const OOPS = ["Oh non…", "Presque !", "Pas tout à fait…", "Hmm…"];
-const MODE_LABEL = { conj: "Časování", frcz: "FR → ČJ", czfr: "ČJ → FR" };
+const MODE_LABEL = {
+  conj: "Časování", frcz: "FR → ČJ", czfr: "ČJ → FR",
+  sent: "PC × Imparfait", num: "Čísla", gen: "Rody", cete: "Čtení",
+};
 const GRP_LABEL = { all: "všechna", irr: "nepravidelná", reg: "pravidelná" };
 const LENGTHS = [
-  { id: 10, label: "10" },
-  { id: 25, label: "25" },
-  { id: 50, label: "50" },
-  { id: 0, label: "∞" },
+  { id: 10, label: "10" }, { id: 25, label: "25" },
+  { id: 50, label: "50" }, { id: 0, label: "∞" },
 ];
 const fmtDate = (ts) =>
   new Date(ts).toLocaleString("cs-CZ", {
     day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit",
   });
 
-// ── Historie (localStorage) ─────────────────────────────────
-const HIST_KEY = "fr-cahier-history";
-function loadHistory() {
+// normalizace psaných odpovědí
+const normBase = (s) =>
+  String(s).toLowerCase().trim()
+    .replace(/[’']/g, "")
+    .replace(/quatre[-\s]vingts/g, "quatre-vingt")
+    .replace(/[-\s]+/g, " ");
+const stripAcc = (s) => normBase(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+// vrací: 2 = přesně, 1 = správně až po odstranění diakritiky, 0 = špatně
+function matchTyped(input, accepted) {
+  for (const a of accepted) if (normBase(input) === normBase(a)) return 2;
+  for (const a of accepted) if (stripAcc(input) === stripAcc(a)) return 1;
+  return 0;
+}
+
+// ── Zvuk (Web Speech API) ───────────────────────────────────
+const TTS_OK = "speechSynthesis" in window;
+function speak(text) {
+  if (!TTS_OK) return;
   try {
-    return JSON.parse(localStorage.getItem(HIST_KEY)) || [];
-  } catch { return []; }
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "fr-FR";
+    u.rate = 0.85;
+    speechSynthesis.speak(u);
+  } catch {}
 }
-function saveHistory(h) {
-  try { localStorage.setItem(HIST_KEY, JSON.stringify(h)); } catch {}
+
+// ── Úložiště ────────────────────────────────────────────────
+const HIST_KEY = "fr-cahier-history";
+const STATS_KEY = "fr-cahier-stats";
+const SETTINGS_KEY = "fr-cahier-settings";
+function loadJSON(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch { return fallback; }
+}
+function saveJSON(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
 }
 
-// ── Generování otázek ───────────────────────────────────────
-function makeQuestion(mode, tenseIds, prevKey, pool) {
-  for (let attempt = 0; attempt < 20; attempt++) {
-    const verb = pick(pool);
-
-    if (mode === "conj") {
-      const tense = pick(tenseIds);
-      const i = rnd(6);
-      const key = "c|" + verb.inf + "|" + tense + "|" + i;
-      if (key === prevKey) continue;
-      const correct = conjugate(verb, tense, i);
-      const poolSet = new Set();
-      for (const t of ["present", "pc", "futur"]) {
-        for (let p = 0; p < 6; p++) {
-          const f = conjugate(verb, t, p);
-          if (f !== correct) poolSet.add(f);
-        }
-      }
-      const options = shuffle([correct, ...shuffle([...poolSet]).slice(0, 3)]);
-      const tenseLabel = TENSES.find((t) => t.id === tense).label;
-      return {
-        key,
-        prompt: verb.inf,
-        sub: verb.cz + " · " + tenseLabel,
-        big: PRONOUNS[i] + " … ?",
-        correct,
-        options,
-      };
-    }
-
-    if (mode === "frcz") {
-      const key = "f|" + verb.inf;
-      if (key === prevKey) continue;
-      const others = shuffle(pool.filter((v) => v.inf !== verb.inf)).slice(0, 3);
-      return {
-        key,
-        prompt: "Co znamená…",
-        sub: "vyber český význam",
-        big: verb.inf,
-        correct: verb.cz,
-        options: shuffle([verb.cz, ...others.map((v) => v.cz)]),
-      };
-    }
-
-    const key = "z|" + verb.inf;
-    if (key === prevKey) continue;
-    const others = shuffle(pool.filter((v) => v.inf !== verb.inf)).slice(0, 3);
-    return {
-      key,
-      prompt: "Jak se řekne…",
-      sub: "vyber francouzské sloveso",
-      big: verb.cz,
-      correct: verb.inf,
-      options: shuffle([verb.inf, ...others.map((v) => v.inf)]),
-    };
+// statistiky: { "<id>": { o: správně, b: chybně } }
+function recStat(id, ok) {
+  if (!id) return;
+  const st = state.stats;
+  if (!st[id]) st[id] = { o: 0, b: 0 };
+  if (ok) st[id].o++; else st[id].b++;
+  saveJSON(STATS_KEY, st);
+}
+const errWeight = (id) => {
+  const s = state.stats[id];
+  if (!s) return 1.3; // mírná preference dosud neviděných
+  const n = s.o + s.b;
+  return 1 + 6 * (s.b / n) * Math.min(1, n / 3);
+};
+function sampleWeighted(cands, idFn) {
+  const ws = cands.map((c) => errWeight(idFn(c)));
+  let sum = ws.reduce((a, b) => a + b, 0);
+  let r = Math.random() * sum;
+  for (let i = 0; i < cands.length; i++) {
+    r -= ws[i];
+    if (r <= 0) return cands[i];
   }
-  return null;
+  return cands[cands.length - 1];
 }
 
 // ── Stav ────────────────────────────────────────────────────
-const state = {
-  screen: "menu", // menu | quiz | done
-  mode: "conj",
+const DEFAULT_SETTINGS = {
   tenseIds: ["present", "pc", "futur"],
-  grp: "all", // all | irr | reg
-  sessionLen: 10, // 0 = nekonečno
+  grp: "all",
+  sessionLen: 10,
+  ans: "choice", // choice | text
+  smart: true,
+  sound: false,
+  textLevel: "all", // all | B1 | B2
+};
+const state = {
+  screen: "menu", // menu | quiz | done | stats
+  mode: "conj",
+  ...DEFAULT_SETTINGS,
+  ...loadJSON(SETTINGS_KEY, {}),
   q: null,
-  picked: null,
+  picked: null,      // vybraná/napsaná odpověď
+  accentWarn: false, // psaní: správně, ale bez diakritiky
   stamp: "",
   score: { ok: 0, total: 0, streak: 0 },
-  history: loadHistory(),
+  history: loadJSON(HIST_KEY, []),
+  stats: loadJSON(STATS_KEY, {}),
+  cteIdx: 0,     // čtení: index aktuálního textu
+  cteQ: 0,       // čtení: index otázky v textu
+  lastText: null,
 };
+function saveSettings() {
+  saveJSON(SETTINGS_KEY, {
+    tenseIds: state.tenseIds, grp: state.grp, sessionLen: state.sessionLen,
+    ans: state.ans, smart: state.smart, sound: state.sound, textLevel: state.textLevel,
+  });
+}
 
 function getPool() {
   return VERBS.filter((v) =>
@@ -329,35 +458,280 @@ function getPool() {
   );
 }
 
+// ── Generování otázek ───────────────────────────────────────
+// q: { key, statId, prompt, big, sub, correct, options?, accepted?,
+//      answerType: "choice"|"text", prefix?, inputMode?, audio?, why?, sayAfter? }
+function makeQuestion() {
+  const mode = state.mode;
+  const pool = getPool();
+  const prevKey = state.q && state.q.key;
+  const K = state.smart ? 6 : 1;
+
+  for (let attempt = 0; attempt < 20; attempt++) {
+    if (mode === "conj") {
+      const cands = Array.from({ length: K }, () => {
+        const verb = pick(pool);
+        const tense = pick(state.tenseIds);
+        return { verb, tense, i: rnd(6) };
+      });
+      const c = sampleWeighted(cands, (x) => "c|" + x.verb.inf + "|" + x.tense);
+      const key = "c|" + c.verb.inf + "|" + c.tense + "|" + c.i;
+      if (key === prevKey) continue;
+      const correct = conjDisplay(c.verb, c.tense, c.i);
+      const q = {
+        key, statId: "c|" + c.verb.inf + "|" + c.tense,
+        prompt: c.verb.inf,
+        sub: c.verb.cz + " · " + TENSE_LABEL[c.tense],
+        big: (c.tense === "subj" ? typePrefix("subj", c.i) : PRONOUNS[c.i]) + " … ?",
+        correct,
+      };
+      if (state.ans === "text") {
+        q.answerType = "text";
+        q.prefix = typePrefix(c.tense, c.i);
+        q.accepted = [conjBare(c.verb, c.tense, c.i)];
+      } else {
+        q.answerType = "choice";
+        const set = new Set();
+        for (const t of TENSES) {
+          for (let p = 0; p < 6; p++) {
+            const f = conjDisplay(c.verb, t.id, p);
+            if (f !== correct) set.add(f);
+          }
+        }
+        q.options = shuffle([correct, ...shuffle([...set]).slice(0, 3)]);
+      }
+      return q;
+    }
+
+    if (mode === "frcz" || mode === "czfr") {
+      const cands = Array.from({ length: K }, () => pick(pool));
+      const verb = sampleWeighted(cands, (v) => "v|" + v.inf);
+      const key = mode + "|" + verb.inf;
+      if (key === prevKey) continue;
+      const others = shuffle(pool.filter((v) => v.inf !== verb.inf)).slice(0, 3);
+      if (mode === "frcz") {
+        return {
+          key, statId: "v|" + verb.inf,
+          prompt: "Co znamená…", sub: "vyber český význam",
+          big: verb.inf, correct: verb.cz,
+          answerType: "choice",
+          options: shuffle([verb.cz, ...others.map((v) => v.cz)]),
+          audio: state.sound ? verb.inf : null,
+        };
+      }
+      const q = {
+        key, statId: "v|" + verb.inf,
+        prompt: "Jak se řekne…",
+        big: verb.cz, correct: verb.inf,
+        sayAfter: state.sound ? verb.inf : null,
+      };
+      if (state.ans === "text") {
+        q.answerType = "text";
+        q.sub = "napiš francouzské sloveso";
+        q.accepted = [verb.inf];
+      } else {
+        q.answerType = "choice";
+        q.sub = "vyber francouzské sloveso";
+        q.options = shuffle([verb.inf, ...others.map((v) => v.inf)]);
+      }
+      return q;
+    }
+
+    if (mode === "sent") {
+      const cands = Array.from({ length: K }, () => rnd(SENTENCES.length));
+      const si = sampleWeighted(cands, (i) => "s|" + i);
+      const key = "s|" + si;
+      if (key === prevKey) continue;
+      const sn = SENTENCES[si];
+      const verb = VERBS.find((v) => v.inf === sn.inf);
+      const impF = conjBare(verb, "imp", sn.p);
+      const pcF = conjBare(verb, "pc", sn.p);
+      const correct = sn.t === "imp" ? impF : pcF;
+      return {
+        key, statId: "s|" + si,
+        prompt: "Doplň správný čas:",
+        big: sn.s, bigClass: "sentence",
+        sub: sn.inf + " (" + verb.cz + ")",
+        correct,
+        answerType: "choice",
+        options: shuffle([impF, pcF]),
+        why: sn.why,
+        sayAfter: state.sound ? sn.s.replace("___", correct) : null,
+      };
+    }
+
+    if (mode === "num") {
+      const cands = Array.from({ length: K }, () => rnd(101));
+      const n = sampleWeighted(cands, (x) => "n|" + Math.floor(x / 10) * 10);
+      const key = "num|" + n;
+      if (key === prevKey) continue;
+      const statId = "n|" + Math.floor(n / 10) * 10;
+      const word = frNumber(n);
+      const listening = state.sound && TTS_OK && Math.random() < 0.5;
+
+      if (listening) {
+        // poslech: přehraje se francouzsky, odpověď číslicemi
+        const q = {
+          key, statId,
+          prompt: "Poslouchej a napiš číslo",
+          big: "🔊", audio: word, sub: "klikni na 🔊 pro přehrání",
+          correct: String(n),
+        };
+        if (state.ans === "text") {
+          q.answerType = "text";
+          q.accepted = [String(n)];
+          q.inputMode = "numeric";
+        } else {
+          q.answerType = "choice";
+          const ds = new Set([n]);
+          while (ds.size < 4) ds.add(numDistractor(n));
+          q.options = shuffle([...ds].map(String));
+        }
+        return q;
+      }
+
+      const q = {
+        key, statId,
+        prompt: "Jak se řekne francouzsky…",
+        big: String(n), sub: "",
+        correct: word,
+        sayAfter: state.sound ? word : null,
+      };
+      if (state.ans === "text") {
+        q.answerType = "text";
+        q.accepted = [word];
+      } else {
+        q.answerType = "choice";
+        const ds = new Set([n]);
+        while (ds.size < 4) ds.add(numDistractor(n));
+        q.options = shuffle([...ds].map(frNumber));
+      }
+      return q;
+    }
+
+    if (mode === "gen") {
+      const cands = Array.from({ length: K }, () => pick(NOUNS));
+      const noun = sampleWeighted(cands, (x) => "g|" + x.n);
+      const key = "g|" + noun.n;
+      if (key === prevKey) continue;
+      return {
+        key, statId: "g|" + noun.n,
+        prompt: "un, nebo une?",
+        big: "… " + noun.n, sub: noun.cz,
+        correct: noun.g === "m" ? "un" : "une",
+        answerType: "choice",
+        options: ["un", "une"],
+        sayAfter: state.sound ? (noun.g === "m" ? "un " : "une ") + noun.n : null,
+      };
+    }
+
+    if (mode === "cete") {
+      const T = TEXTS[state.cteIdx];
+      const qd = T.qs[state.cteQ];
+      const vf = qd.o.length === 2 && qd.o[0] === "Vrai";
+      return {
+        key: "t|" + state.cteIdx + "|" + state.cteQ,
+        statId: "t|" + state.cteIdx,
+        prompt: "Otázka " + (state.cteQ + 1) + " / " + T.qs.length,
+        big: qd.q, bigClass: "sentence",
+        sub: "",
+        correct: qd.c,
+        answerType: "choice",
+        options: vf ? [...qd.o] : shuffle([...qd.o]),
+        why: qd.why || null,
+      };
+    }
+  }
+  return null;
+}
+
+// výběr textu pro čtení (vážený chybovostí, bez okamžitého opakování)
+function pickText() {
+  let idxs = TEXTS.map((_, i) => i).filter(
+    (i) => state.textLevel === "all" || TEXTS[i].level === state.textLevel
+  );
+  if (!idxs.length) idxs = TEXTS.map((_, i) => i);
+  if (idxs.length > 1 && state.lastText !== null) {
+    idxs = idxs.filter((i) => i !== state.lastText);
+  }
+  const cands = state.smart
+    ? Array.from({ length: Math.min(6, idxs.length) }, () => pick(idxs))
+    : [pick(idxs)];
+  return sampleWeighted(cands, (i) => "t|" + i);
+}
+
+// věrohodné číselné distraktory (prohozené desítky/jednotky, ±1, ±10…)
+function numDistractor(n) {
+  const cand = [];
+  const t = Math.floor(n / 10), u = n % 10;
+  if (t !== u && u * 10 + t <= 100) cand.push(u * 10 + t); // 42 → 24
+  if (n + 10 <= 100) cand.push(n + 10);
+  if (n - 10 >= 0) cand.push(n - 10);
+  if (n + 1 <= 100) cand.push(n + 1);
+  if (n - 1 >= 0) cand.push(n - 1);
+  if (n >= 60 && n <= 79) cand.push(n + 20 <= 100 ? n + 20 : n - 20); // 70 × 90
+  if (n >= 80) cand.push(n - 20);
+  const c = pick(cand);
+  return c === n ? rnd(101) : c;
+}
+
 // ── Akce ────────────────────────────────────────────────────
 function start(mode) {
   state.mode = mode;
   state.score = { ok: 0, total: 0, streak: 0 };
-  state.q = makeQuestion(mode, state.tenseIds, null, getPool());
+  if (mode === "cete") {
+    state.cteIdx = pickText();
+    state.lastText = state.cteIdx;
+    state.cteQ = 0;
+  }
+  state.q = null;
+  state.q = makeQuestion();
   state.picked = null;
+  state.accentWarn = false;
   state.screen = "quiz";
   render();
+  if (state.q && state.q.audio) speak(state.q.audio);
 }
 
-function answer(opt) {
-  if (state.picked !== null) return;
-  state.picked = opt;
-  const ok = opt === state.q.correct;
+function applyAnswer(ok, displayPicked) {
+  state.picked = displayPicked;
   state.stamp = ok ? pick(PRAISE) : pick(OOPS);
   state.score.ok += ok ? 1 : 0;
   state.score.total += 1;
   state.score.streak = ok ? state.score.streak + 1 : 0;
+  recStat(state.q.statId, ok);
   render();
+  if (state.q.sayAfter) speak(state.q.sayAfter);
+}
+
+function answerChoice(opt) {
+  if (state.picked !== null) return;
+  applyAnswer(opt === state.q.correct, opt);
+}
+
+function answerTyped(text) {
+  if (state.picked !== null || !text.trim()) return;
+  const m = matchTyped(text, state.q.accepted);
+  state.accentWarn = m === 1;
+  applyAnswer(m > 0, text.trim());
 }
 
 function next() {
-  if (state.sessionLen > 0 && state.score.total >= state.sessionLen) {
+  if (state.mode === "cete") {
+    if (state.cteQ >= TEXTS[state.cteIdx].qs.length - 1) {
+      finish();
+      return;
+    }
+    state.cteQ++;
+  } else if (state.sessionLen > 0 && state.score.total >= state.sessionLen) {
     finish();
     return;
   }
-  state.q = makeQuestion(state.mode, state.tenseIds, state.q && state.q.key, getPool());
+  state.q = makeQuestion();
   state.picked = null;
+  state.accentWarn = false;
   render();
+  if (state.q && state.q.audio) speak(state.q.audio);
 }
 
 function finish() {
@@ -367,7 +741,7 @@ function finish() {
       ok: state.score.ok, t: state.score.total,
     };
     state.history = [entry, ...state.history].slice(0, 30);
-    saveHistory(state.history);
+    saveJSON(HIST_KEY, state.history);
     state.screen = "done";
   } else {
     state.screen = "menu";
@@ -382,12 +756,7 @@ function toggleTense(id) {
   } else {
     state.tenseIds = [...cur, id];
   }
-  render();
-}
-
-function clearHistory() {
-  state.history = [];
-  try { localStorage.removeItem(HIST_KEY); } catch {}
+  saveSettings();
   render();
 }
 
@@ -405,24 +774,42 @@ function renderMenu() {
   const pool = getPool();
   let html =
     '<h1 class="title">Mon cahier de français</h1>' +
-    '<p class="subtitle">procvičování sloves · ' + pool.length + " sloves</p>";
+    '<p class="subtitle">procvičování francouzštiny · ' + pool.length + " sloves · " + NOUNS.length + " podst. jmen</p>";
 
   html += '<div class="card"><span class="label">Slovesa</span>' +
     chipRow(
       [{ id: "all", label: "Všechna" }, { id: "irr", label: "Nepravidelná" }, { id: "reg", label: "Pravidelná" }],
       (g) => state.grp === g.id, "grp"
+    ) +
+    '<div style="height:14px"></div><span class="label">Časy (časování)</span>' +
+    chipRow(TENSES, (t) => state.tenseIds.includes(t.id), "tense") +
+    '<div style="height:14px"></div><span class="label">Počet otázek</span>' +
+    chipRow(LENGTHS, (l) => state.sessionLen === l.id, "len") +
+    '<div style="height:14px"></div><span class="label">Úroveň textů (čtení)</span>' +
+    chipRow(
+      [{ id: "all", label: "Vše" }, { id: "B1", label: "B1" }, { id: "B2", label: "B2" }],
+      (l) => state.textLevel === l.id, "text-level"
+    ) +
+    '<div style="height:14px"></div><span class="label">Další volby</span>' +
+    chipRow(
+      [
+        { id: "ans", label: state.ans === "text" ? "✍ psaní odpovědí" : "✍ psaní odpovědí" },
+        { id: "smart", label: "🧠 chytré opakování" },
+        ...(TTS_OK ? [{ id: "sound", label: "🔊 zvuk" }] : []),
+      ],
+      (o) => (o.id === "ans" ? state.ans === "text" : state[o.id]),
+      "toggle"
     ) + "</div>";
-
-  html += '<div class="card"><span class="label">Časy (pro režim časování)</span>' +
-    chipRow(TENSES, (t) => state.tenseIds.includes(t.id), "tense") + "</div>";
-
-  html += '<div class="card"><span class="label">Počet otázek</span>' +
-    chipRow(LENGTHS, (l) => state.sessionLen === l.id, "len") + "</div>";
 
   html +=
     '<button class="modeBtn" data-action="start" data-id="conj">Časování<small>nous + prendre → nous prenons</small></button>' +
+    '<button class="modeBtn" data-action="start" data-id="sent">Passé composé × imparfait<small>doplň správný čas do věty</small></button>' +
     '<button class="modeBtn" data-action="start" data-id="frcz">Slovíčka: francouzsky → česky<small>mettre → dát, položit</small></button>' +
-    '<button class="modeBtn" data-action="start" data-id="czfr">Slovíčka: česky → francouzsky<small>slíbit → promettre</small></button>';
+    '<button class="modeBtn" data-action="start" data-id="czfr">Slovíčka: česky → francouzsky<small>slíbit → promettre</small></button>' +
+    '<button class="modeBtn" data-action="start" data-id="cete">Porozumění textu (DELF)<small>přečti text a odpověz na otázky · ' + TEXTS.length + " textů</small></button>" +
+    '<button class="modeBtn" data-action="start" data-id="num">Čísla 0–100<small>42 → quarante-deux' + (TTS_OK ? " (se zvukem i poslech)" : "") + "</small></button>" +
+    '<button class="modeBtn" data-action="start" data-id="gen">Rody: un / une<small>… problème? un!</small></button>' +
+    '<button class="modeBtn" data-action="show-stats">📊 Statistiky chyb<small>co jde nejhůř a co procvičit</small></button>';
 
   if (state.history.length > 0) {
     html += '<div class="card"><div class="histHead"><span class="label">Historie</span>' +
@@ -431,7 +818,7 @@ function renderMenu() {
       const p = Math.round((100 * h.ok) / h.t);
       const cls = p >= 80 ? " hi" : p < 50 ? " lo" : "";
       html += '<div class="histRow"><span class="histDate">' + fmtDate(h.d) + "</span>" +
-        '<span class="histMode">' + MODE_LABEL[h.m] + " · " + GRP_LABEL[h.g] + "</span>" +
+        '<span class="histMode">' + MODE_LABEL[h.m] + (h.m === "conj" || h.m === "frcz" || h.m === "czfr" ? " · " + GRP_LABEL[h.g] : "") + "</span>" +
         '<span class="histScore' + cls + '">' + h.ok + "/" + h.t + " · " + p + " %</span></div>";
     }
     html += "</div>";
@@ -442,8 +829,11 @@ function renderMenu() {
 function renderQuiz() {
   const s = state.score;
   const q = state.q;
+  const isCete = state.mode === "cete";
   let progress = "";
-  if (state.sessionLen > 0) {
+  if (isCete) {
+    progress = Math.min(state.cteQ + 1, TEXTS[state.cteIdx].qs.length) + " / " + TEXTS[state.cteIdx].qs.length + " · ";
+  } else if (state.sessionLen > 0) {
     const cur = Math.min(s.total + (state.picked === null ? 1 : 0), state.sessionLen);
     progress = cur + " / " + state.sessionLen + " · ";
   }
@@ -454,27 +844,63 @@ function renderQuiz() {
     (s.streak >= 3 ? ' · <span class="streak">🔥 ' + s.streak + "</span>" : "") +
     "</div></div>";
 
+  if (isCete) {
+    const T = TEXTS[state.cteIdx];
+    html += '<div class="card textCard">' +
+      '<div class="labelRow"><span class="label">' + esc(T.title) + " · " + esc(T.level) + "</span>" +
+      (state.sound && TTS_OK ? '<button class="histClear" data-action="read-text">🔊 přečíst</button>' : "") +
+      "</div>" +
+      '<p class="readText">' + esc(T.text) + "</p></div>";
+  }
+
   html += '<div class="card">' +
     '<p class="qPrompt">' + esc(q.prompt) + "</p>" +
-    '<p class="qBig">' + esc(q.big) + "</p>" +
-    '<p class="qSub">' + esc(q.sub) + "</p>";
+    '<p class="qBig' + (q.bigClass ? " " + q.bigClass : "") + '">' + esc(q.big) + "</p>" +
+    (q.sub ? '<p class="qSub">' + esc(q.sub) + "</p>" : "");
 
-  q.options.forEach((opt, idx) => {
-    let cls = "opt";
-    if (state.picked !== null) {
-      if (opt === q.correct) cls += " good";
-      else if (opt === state.picked) cls += " bad";
-      else cls += " dim";
-    }
-    html += '<button class="' + cls + '" data-action="answer" data-id="' + idx + '"' +
-      (state.picked !== null ? " disabled" : "") + ">" + esc(opt) + "</button>";
-  });
+  if (q.audio) {
+    html += '<button class="speakBtn" data-action="replay" aria-label="Přehrát znovu">🔊</button>';
+  }
+
+  if (q.answerType === "choice") {
+    q.options.forEach((opt, idx) => {
+      let cls = "opt";
+      if (state.picked !== null) {
+        if (opt === q.correct) cls += " good";
+        else if (opt === state.picked) cls += " bad";
+        else cls += " dim";
+      }
+      html += '<button class="' + cls + '" data-action="answer" data-id="' + idx + '"' +
+        (state.picked !== null ? " disabled" : "") + ">" + esc(opt) + "</button>";
+    });
+  } else if (state.picked === null) {
+    html += '<div class="typeRow">' +
+      (q.prefix ? '<span class="typePrefix">' + esc(q.prefix) + "</span>" : "") +
+      '<input class="typeInput" id="typeInput" autocomplete="off" autocapitalize="off" spellcheck="false"' +
+      (q.inputMode ? ' inputmode="' + q.inputMode + '"' : "") + ">" +
+      '<button class="typeOk" data-action="submit-typed">OK</button></div>';
+  } else {
+    const ok = state.accentWarn || matchTyped(state.picked, q.accepted) > 0;
+    html += '<div class="typedAnswer">' +
+      (q.prefix ? esc(q.prefix) + " " : "") +
+      (ok ? "<b>" + esc(state.picked) + "</b>" : '<span class="wrong">' + esc(state.picked) + "</span>") +
+      "</div>";
+  }
 
   if (state.picked !== null) {
-    const ok = state.picked === q.correct;
+    const ok = q.answerType === "choice"
+      ? state.picked === q.correct
+      : matchTyped(state.picked, q.accepted) > 0;
     html += '<div class="stamp ' + (ok ? "ok" : "ko") + '">' + esc(state.stamp) + "</div>";
-    if (!ok) html += '<p class="correction">→ ' + esc(q.correct) + "</p>";
-    const last = state.sessionLen > 0 && s.total >= state.sessionLen;
+    if (state.accentWarn) {
+      html += '<p class="accentNote">Pozor na akcenty: ' + esc(q.correct) + "</p>";
+    } else if (!ok) {
+      html += '<p class="correction">→ ' + esc(q.correct) + "</p>";
+    }
+    if (q.why) html += '<p class="why">' + esc(q.why) + "</p>";
+    const last = state.mode === "cete"
+      ? state.cteQ >= TEXTS[state.cteIdx].qs.length - 1
+      : state.sessionLen > 0 && s.total >= state.sessionLen;
     html += '<button class="nextBtn" data-action="next">' + (last ? "Výsledek →" : "Další →") + "</button>";
   }
   html += "</div>";
@@ -489,16 +915,76 @@ function renderDone() {
     '<div class="doneStamp">' + grade + "</div>" +
     '<div class="doneScore">' + s.ok + " / " + s.total + "</div>" +
     '<div class="donePct">' + pct + " % správně</div>" +
-    '<div class="doneMeta">' + MODE_LABEL[state.mode] + " · " + GRP_LABEL[state.grp] + " slovesa</div>" +
+    '<div class="doneMeta">' + MODE_LABEL[state.mode] + "</div>" +
     '<button class="nextBtn" data-action="encore">Encore ! (ještě jednou)</button>' +
     '<button class="modeBtn doneMenuBtn" data-action="menu">Zpět do menu</button>' +
     "</div>";
 }
 
+// ── Statistiky ──────────────────────────────────────────────
+function aggStats(prefix) {
+  // vrátí mapu klíč(bez prefixu) → {o,b}
+  const out = {};
+  for (const [id, s] of Object.entries(state.stats)) {
+    if (!id.startsWith(prefix)) continue;
+    out[id.slice(prefix.length)] = { o: (out[id.slice(prefix.length)]?.o || 0) + s.o, b: (out[id.slice(prefix.length)]?.b || 0) + s.b };
+  }
+  return out;
+}
+function statRows(entries, nameFn, max, delSpec) {
+  const rows = entries
+    .map(([k, s]) => ({ k, ...s, n: s.o + s.b, r: s.b / (s.o + s.b) }))
+    .filter((x) => x.b > 0)
+    .sort((a, b) => b.r - a.r || b.b - a.b)
+    .slice(0, max);
+  if (!rows.length) return '<p class="statEmpty">Zatím žádné chyby. 🎉</p>';
+  return rows.map((x) =>
+    '<div class="statRow"><span class="statName">' + nameFn(x.k) + "</span>" +
+    '<span class="statVal' + (x.r >= 0.4 ? " lo" : "") + '">' + x.b + "× chyba z " + x.n + " (" + Math.round(100 * (1 - x.r)) + " % úspěšnost)" +
+    (delSpec ? ' <button class="knowBtn" data-action="mark-known" data-id="' + esc(delSpec(x.k)) + '" title="Vynulovat — tohle už umím">✓ umím</button>' : "") +
+    "</span></div>"
+  ).join("");
+}
+function renderStats() {
+  let html = '<div class="topbar"><button class="back" data-action="menu">← menu</button></div>';
+  html += '<h1 class="title">Statistiky chyb</h1><p class="subtitle">počítá se všechno napříč sessions (jen v tomhle zařízení)</p>';
+
+  // slovesa: agregace c|inf|tense → per sloveso
+  const byVerbTense = aggStats("c|");
+  const byVerb = {};
+  const byTense = {};
+  for (const [k, s] of Object.entries(byVerbTense)) {
+    const [inf, tense] = k.split("|");
+    byVerb[inf] = { o: (byVerb[inf]?.o || 0) + s.o, b: (byVerb[inf]?.b || 0) + s.b };
+    byTense[tense] = { o: (byTense[tense]?.o || 0) + s.o, b: (byTense[tense]?.b || 0) + s.b };
+  }
+  html += '<div class="card"><span class="label">Nejtěžší slovesa (časování)</span>' +
+    statRows(Object.entries(byVerb), (k) => esc(k), 8, (k) => "c|" + k + "|") + "</div>";
+  html += '<div class="card"><span class="label">Podle času</span>' +
+    statRows(Object.entries(byTense), (k) => esc(TENSE_LABEL[k] || k), 7, null) + "</div>";
+  html += '<div class="card"><span class="label">Slovíčka</span>' +
+    statRows(Object.entries(aggStats("v|")), (k) => esc(k), 8, (k) => "v|" + k) + "</div>";
+  html += '<div class="card"><span class="label">Čísla (podle desítek)</span>' +
+    statRows(Object.entries(aggStats("n|")), (k) => esc(k) + "–" + (Number(k) + 9 > 100 ? 100 : Number(k) + 9), 5, (k) => "n|" + k) + "</div>";
+  html += '<div class="card"><span class="label">Rody</span>' +
+    statRows(Object.entries(aggStats("g|")), (k) => esc(k), 8, (k) => "g|" + k) + "</div>";
+  html += '<div class="card"><span class="label">PC × imparfait (věty)</span>' +
+    statRows(Object.entries(aggStats("s|")), (k) => esc((SENTENCES[Number(k)] || {}).s || "věta " + k), 5, (k) => "s|" + k) + "</div>";
+  html += '<div class="card"><span class="label">Čtení (podle textu)</span>' +
+    statRows(Object.entries(aggStats("t|")), (k) => esc((TEXTS[Number(k)] || {}).title || "text " + k), 5, (k) => "t|" + k) + "</div>";
+
+  html += '<p class="statNote">Chytré opakování 🧠 z těchhle dat automaticky častěji vybírá to, kde jsou chyby. Tlačítkem „✓ umím“ položku vynuluješ — zmizí ze seznamu a přestane se protežovat. Když se chyby vrátí, objeví se tu zase.</p>';
+  html += '<button class="modeBtn" data-action="clear-stats">Smazat statistiky</button>';
+  return html;
+}
+
 function render() {
   if (state.screen === "menu") app.innerHTML = renderMenu();
   else if (state.screen === "quiz") app.innerHTML = renderQuiz();
+  else if (state.screen === "stats") app.innerHTML = renderStats();
   else app.innerHTML = renderDone();
+  const inp = document.getElementById("typeInput");
+  if (inp) inp.focus();
 }
 
 app.addEventListener("click", (e) => {
@@ -506,16 +992,49 @@ app.addEventListener("click", (e) => {
   if (!btn) return;
   const action = btn.dataset.action;
   const id = btn.dataset.id;
-  if (action === "grp") { state.grp = id; render(); }
+  if (action === "grp") { state.grp = id; saveSettings(); render(); }
   else if (action === "tense") toggleTense(id);
-  else if (action === "len") { state.sessionLen = Number(id); render(); }
+  else if (action === "len") { state.sessionLen = Number(id); saveSettings(); render(); }
+  else if (action === "text-level") { state.textLevel = id; saveSettings(); render(); }
+  else if (action === "read-text") speak(TEXTS[state.cteIdx].text);
+  else if (action === "toggle") {
+    if (id === "ans") state.ans = state.ans === "text" ? "choice" : "text";
+    else state[id] = !state[id];
+    saveSettings(); render();
+  }
   else if (action === "start") start(id);
-  else if (action === "answer") answer(state.q.options[Number(id)]);
+  else if (action === "answer") answerChoice(state.q.options[Number(id)]);
+  else if (action === "submit-typed") answerTyped(document.getElementById("typeInput").value);
+  else if (action === "replay") speak(state.q.audio);
   else if (action === "next") next();
   else if (action === "finish") finish();
   else if (action === "encore") start(state.mode);
   else if (action === "menu") { state.screen = "menu"; render(); }
-  else if (action === "clear-history") clearHistory();
+  else if (action === "show-stats") { state.screen = "stats"; render(); }
+  else if (action === "clear-history") {
+    state.history = [];
+    try { localStorage.removeItem(HIST_KEY); } catch {}
+    render();
+  }
+  else if (action === "mark-known") {
+    const spec = id;
+    for (const key of Object.keys(state.stats)) {
+      if (key === spec || (spec.endsWith("|") && key.startsWith(spec))) delete state.stats[key];
+    }
+    saveJSON(STATS_KEY, state.stats);
+    render();
+  }
+  else if (action === "clear-stats") {
+    state.stats = {};
+    try { localStorage.removeItem(STATS_KEY); } catch {}
+    render();
+  }
+});
+
+app.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.target.id === "typeInput") {
+    answerTyped(e.target.value);
+  }
 });
 
 render();
