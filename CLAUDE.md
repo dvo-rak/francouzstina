@@ -6,7 +6,7 @@ tohle repo udržovat v nové konverzaci bez historie.
 ## Co to je
 
 Webová appka na procvičování francouzštiny pro Antonínovu přítelkyni
-(příprava DELF B1→B2, není technická, používá hlavně mobil). Běží na GitHub
+(úrovně A1–B2, není technická, používá hlavně mobil). Běží na GitHub
 Pages: https://dvo-rak.github.io/francouzstina/ — statická, bez buildu, bez
 backendu, vše v localStorage. UI česky, obsah francouzsky.
 

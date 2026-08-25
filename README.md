@@ -1,6 +1,6 @@
 # Mon cahier de français 🇫🇷
 
-Aplikace na procvičování francouzštiny (příprava na DELF B1/B2). Běží přímo v prohlížeči:
+Aplikace na procvičování francouzštiny, úrovně A1–B2. Běží přímo v prohlížeči:
 
 **https://dvo-rak.github.io/francouzstina/**
 
