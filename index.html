@@ -289,7 +289,7 @@
 <script>
 "use strict";
 
-const APP_VERSION = "22 (2026-08-26)";
+const APP_VERSION = "23 (2026-08-26)";
 
 // ── Skládání tvarů ──────────────────────────────────────────
 const PRONOUNS = ["je", "tu", "il", "nous", "vous", "ils"];
@@ -1473,8 +1473,9 @@ function renderQuiz() {
       "</div>";
   }
 
-  // 🏠 domeček jako rozbalovací nápověda pod možnostmi (jen v pcaux)
-  if (state.mode === "pcaux") {
+  // 🏠 domeček jako rozbalovací nápověda pod možnostmi
+  // (podle typu otázky, ne režimu — funguje i v Mixu a ve frontách)
+  if (/^pa\|/.test(q.statId || "")) {
     const inf = (PCAUX[Number((q.statId || "").split("|")[1])] || {}).inf || "";
     html += '<button class="houseLink' + (state.houseOpen ? " open" : "") + '" data-action="toggle-house">' +
       (state.houseOpen ? "🏠 skrýt domeček ▲" : "🏠 domeček slovesa être ▼") + "</button>";

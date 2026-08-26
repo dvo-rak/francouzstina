@@ -64,7 +64,8 @@ vaty. Chyby přiznej rovnou. Cílové uživatelce appky se říká „QA".
     4 unikátní možnosti. `avoirCOD: true` = sloveso z domečku, které má
     v té větě přímý předmět, takže jde s avoir (j'ai sorti le chien).
     K režimu patří rozbalovací panel „domečku“ pod možnostmi (`houseSVG()`
-    v `renderQuiz()`): jedno inline SVG, slovesa a souřadnice v `HOUSE_LAYOUT`,
+    v `renderQuiz()`, podmínka je na `q.statId` začínající `pa|`, NE na režimu —
+    jinak by chyběl v Mixu a ve frontách): jedno inline SVG, slovesa a souřadnice v `HOUSE_LAYOUT`,
     zvýraznění aktuálního slovesa je jen CSS třída — nikdy se negenerují
     varianty obrázku. Dva různé stavy: `state.houseOpen` (rozbaleno) je jen
     v paměti a resetuje se na false u KAŽDÉ nové otázky (start i všechny
