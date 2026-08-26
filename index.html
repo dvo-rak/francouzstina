@@ -264,7 +264,7 @@
 <script>
 "use strict";
 
-const APP_VERSION = "18 (2026-08-25)";
+const APP_VERSION = "19 (2026-08-26)";
 
 // ── Skládání tvarů ──────────────────────────────────────────
 const PRONOUNS = ["je", "tu", "il", "nous", "vous", "ils"];
@@ -390,7 +390,7 @@ const MODE_LABEL = {
   mix: "Mix", conj: "Časování", frcz: "FR → ČJ", czfr: "ČJ → FR",
   sent: "PC × Imparfait", num: "Čísla", gen: "Rody", cete: "Čtení",
   gram: "Gramatika", dict: "Diktát", due: "Opakování", errs: "Moje chyby",
-  swiss: "Švýcarská fr.",
+  swiss: "Švýcarská fr.", aux: "Être / Avoir",
 };
 const GRP_LABEL = { all: "všechna", irr: "nepravidelná", reg: "pravidelná" };
 const LENGTHS = [
@@ -606,7 +606,7 @@ const nounPool = () => NOUNS.filter((n) => lvlOk(n.lvl, "A2"));
 // režimy dostupné na dané úrovni (věty PC×imp až od A2, kde je PC)
 const mixModes = () => {
   const m = ["conj", "conj", "conj", "frcz", "czfr", "num", "gen", "gen", "gram", "gram"];
-  if (LVL[state.level] >= LVL.A2) m.push("sent", "sent");
+  if (LVL[state.level] >= LVL.A2) m.push("sent", "sent", "aux", "aux");
   return m;
 };
 // slovíčka: slovesa / tematická zásoba / obojí, dle nastavení a úrovně
@@ -713,6 +713,41 @@ function buildNumListen(n) {
   if (state.ans === "text") { q.answerType = "text"; q.accepted = [String(n)]; q.inputMode = "numeric"; }
   else { q.answerType = "choice"; q.options = shuffle(numOptions(n).map(String)); }
   return q;
+}
+
+// „Dům slovesa être“ — pomůcka a poznámky k jednotlivým slovesům
+const HOUSE_NOTE = {
+  "aller": "Pohyb — dům être.", "venir": "Pohyb — dům être.",
+  "arriver": "Příchod — dům être.", "entrer": "Vstup — dům être.",
+  "rester": "Setrvání — dům être.", "tomber": "Pád — dům être.",
+  "naître": "Zrození — dům être.", "mourir": "Smrt — dům être.",
+  "devenir": "Změna stavu — dům être.", "revenir": "Návrat — dům être.",
+  "rentrer": "Návrat domů — dům être.",
+  "monter": "Dům être — ale s předmětem jde s avoir: j'ai monté les valises.",
+  "descendre": "Dům être — ale s předmětem jde s avoir: j'ai descendu la poubelle.",
+  "sortir": "Dům être — ale s předmětem jde s avoir: j'ai sorti le chien.",
+  "passer": "Dům être — ale s předmětem jde s avoir: j'ai passé un examen.",
+  "retourner": "Dům être — ale s předmětem jde s avoir: j'ai retourné la crêpe.",
+  "tenir": "Pozor: NENÍ v domě être, i když venir ano → j'ai tenu.",
+  "apparaître": "Objevení se — jde s être.",
+  "paraître": "Pozor: paraître a disparaître jdou s AVOIR, jen apparaître s être.",
+  "disparaître": "Pozor: jde s avoir → il a disparu.",
+};
+
+function buildAux(verb) {
+  const isEtre = verb.aux === "etre";
+  const form = conjDisplay(verb, "pc", 0); // je suis allé / j'ai mangé
+  return {
+    key: "aux|" + verb.inf, statId: "a|" + verb.inf,
+    prompt: "Passé composé se tvoří s…",
+    big: verb.inf,
+    sub: verb.cz,
+    correct: isEtre ? "être" : "avoir",
+    answerType: "choice",
+    options: ["être", "avoir"],
+    why: (HOUSE_NOTE[verb.inf] ? HOUSE_NOTE[verb.inf] + " " : "") + "→ " + form,
+    sayAfter: state.sound ? form : null,
+  };
 }
 
 function buildSwiss(si) {
@@ -850,6 +885,10 @@ function questionFromStatId(id) {
     return noun ? buildGen(noun) : null;
   }
   if (p[0] === "sw") return SWISS[Number(p[1])] ? buildSwiss(Number(p[1])) : null;
+  if (p[0] === "a") {
+    const verb = VERBS.find((v) => v.inf === p[1]);
+    return verb ? buildAux(verb) : null;
+  }
   if (p[0] === "s") return SENTENCES[Number(p[1])] ? buildSent(Number(p[1])) : null;
   if (p[0] === "gr") return GRAMMAR[Number(p[1])] ? buildGram(Number(p[1])) : null;
   if (p[0] === "d") return DICT[Number(p[1])] ? buildDict(Number(p[1])) : null;
@@ -924,6 +963,18 @@ function makeQuestion() {
       const n = sampleWeighted(cands, (x) => "n|" + Math.floor(x / 10) * 10);
       const listening = state.sound && TTS_OK && Math.random() < 0.5;
       const q = listening ? buildNumListen(n) : buildNum(n);
+      if (q.key === prevKey) continue;
+      return q;
+    }
+
+    if (mode === "aux") {
+      // vyvážený výběr: sloves s être je málo, ale drill má být 50/50
+      const etre = pool.filter((v) => v.aux === "etre");
+      const avoir = pool.filter((v) => v.aux === "avoir");
+      const side = etre.length && (!avoir.length || Math.random() < 0.5) ? etre : avoir;
+      const cands = Array.from({ length: K }, () => pick(side));
+      const verb = sampleWeighted(cands, (v) => "a|" + v.inf);
+      const q = buildAux(verb);
       if (q.key === prevKey) continue;
       return q;
     }
@@ -1204,6 +1255,7 @@ function renderMenu() {
     '<span class="label secLabel">Cvičení</span>' +
     '<button class="modeBtn" data-action="start" data-id="conj">Časování<small>nous + prendre → nous prenons</small></button>' +
     '<button class="modeBtn" data-action="start" data-id="gram">Gramatika<small>členy, předložky, zájmena, subjonctif… doplň do věty</small></button>' +
+    (LVL[state.level] >= LVL.A2 ? '<button class="modeBtn" data-action="start" data-id="aux">Être, nebo avoir?<small>s kterým pomocným slovesem se tvoří passé composé</small></button>' : "") +
     (LVL[state.level] >= LVL.A2 ? '<button class="modeBtn" data-action="start" data-id="sent">Passé composé × imparfait<small>doplň správný čas do věty</small></button>' : "") +
     '<button class="modeBtn" data-action="start" data-id="frcz">Slovíčka: francouzsky → česky<small>mettre → dát, položit</small></button>' +
     '<button class="modeBtn" data-action="start" data-id="czfr">Slovíčka: česky → francouzsky<small>slíbit → promettre</small></button>' +
@@ -1398,6 +1450,8 @@ function renderStats() {
     statRows(Object.entries(aggStats("g|")), (k) => esc(k), 8, (k) => "g|" + k) + "</div>";
   html += '<div class="card"><span class="label">PC × imparfait (věty)</span>' +
     statRows(Object.entries(aggStats("s|")), (k) => esc((SENTENCES[Number(k)] || {}).s || "věta " + k), 5, (k) => "s|" + k) + "</div>";
+  html += '<div class="card"><span class="label">Être / Avoir (passé composé)</span>' +
+    statRows(Object.entries(aggStats("a|")), (k) => esc(k), 8, (k) => "a|" + k) + "</div>";
   html += '<div class="card"><span class="label">Švýcarská francouzština</span>' +
     statRows(Object.entries(aggStats("sw|")), (k) => esc((SWISS[Number(k)] || {}).ch || "položka " + k), 8, (k) => "sw|" + k) + "</div>";
   html += '<div class="card"><span class="label">Gramatika</span>' +
@@ -1495,6 +1549,7 @@ function renderHelp() {
     '<p><b>Gramatika</b> — doplňování do vět podle témat tvé úrovně: členy, předložky, zápor, zájmena (COD/COI, y/en), srovnávání, vztažná zájmena, podmínky, subjonctif… Po odpovědi krátké vysvětlení.</p>' +
     '<p><b>Diktát (dictée)</b> — přehraje se celá věta francouzsky (klidně opakovaně), ty ji napíšeš. Vyhodnocení po slovech: zeleně správně, oranžově jen chybějící akcent, červeně chyba.</p>' +
     '<p><b>Časování</b> — sloveso, osoba a čas; vybereš (nebo napíšeš) správný tvar. Které časy se procvičují, si zvolíš v nastavení.</p>' +
+    '<p><b>Être, nebo avoir?</b> — u každého slovesa vybíráš, kterým pomocným slovesem se tvoří passé composé. Většina sloves jde s <i>avoir</i> (<i>j\'ai mangé</i>), ale slovesa pohybu a změny stavu z „domu slovesa être“ jdou s <i>être</i> (<i>je suis allé</i>) — a příčestí se pak shoduje s podmětem (<i>elle est allée</i>). Otázky chodí půl na půl, ať se to dá naučit, a u záludností je vysvětlení: <i>tenir</i> jde s avoir, i když <i>venir</i> s être; <i>paraître</i> a <i>disparaître</i> s avoir, ale <i>apparaître</i> s être; a <i>monter, descendre, sortir, passer, retourner</i> mají obojí — s předmětem jdou s avoir (<i>je suis sorti</i> × <i>j\'ai sorti le chien</i>).</p>' +
     '<p><b>Passé composé × imparfait</b> — věta s mezerou, vybíráš mezi dvěma tvary. Po odpovědi se ukáže, <i>proč</i> je správně zrovna tenhle čas (signální slova jako <i>tous les étés</i>, <i>soudain</i>, <i>d\'habitude</i>…).</p>' +
     '<p><b>Slovíčka</b> — překlad oběma směry. V nastavení si vybereš zdroj: jen slovesa, jen tematická zásoba (jídlo, rodina, čas, barvy, cestování, počasí, oblečení, práce, pocity…), nebo obojí.</p>' +
     '<p><b>Porozumění textu (DELF)</b> — krátký text (e-mail, inzerát, článek…) a otázky francouzsky, jako u zkoušky. Text zůstává během otázek nahoře. Nabízejí se texty do tvé úrovně včetně (na B2 tedy i A1–B1 — nižší úroveň textu neuškodí).</p>' +

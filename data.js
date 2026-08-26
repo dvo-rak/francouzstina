@@ -107,6 +107,8 @@ const VERBS = [
   { inf: "réussir", lvl: "A2", cz: "uspět", grp: "reg", present: ["réussis", "réussis", "réussit", "réussissons", "réussissez", "réussissent"], pp: "réussi", aux: "avoir" },
   { inf: "grandir", lvl: "A2", cz: "vyrůst, růst", grp: "reg", present: ["grandis", "grandis", "grandit", "grandissons", "grandissez", "grandissent"], pp: "grandi", aux: "avoir" },
   { inf: "vendre", lvl: "A2", cz: "prodat", grp: "reg", present: ["vends", "vends", "vend", "vendons", "vendez", "vendent"], pp: "vendu", aux: "avoir" },
+  { inf: "retourner", lvl: "A2", cz: "vrátit se, jet zpátky", grp: "reg", present: ["retourne", "retournes", "retourne", "retournons", "retournez", "retournent"], pp: "retourné", aux: "etre" },
+  { inf: "passer", lvl: "A2", cz: "projít, zastavit se", grp: "reg", present: ["passe", "passes", "passe", "passons", "passez", "passent"], pp: "passé", aux: "etre" },
 ];
 
 // ─────────────────────────────────────────────────────────────
