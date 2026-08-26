@@ -234,6 +234,24 @@
     margin-top: 12px; text-decoration: underline; text-underline-offset: 2px;
   }
   .hideLink:hover { color: #b8302f; }
+  .houseLink {
+    display: block; width: 100%; margin-top: 4px;
+    background: #fff; border: 1.5px dashed #b9c6de; border-radius: 10px;
+    font-family: inherit; font-size: 0.92rem; color: #17356e;
+    padding: 9px; cursor: pointer;
+  }
+  .houseLink:hover { border-color: #17356e; }
+  .houseSvg { width: 100%; height: auto; display: block; }
+  .houseSvg .hline { fill: none; stroke: #17356e; stroke-width: 1.6; }
+  .houseSvg .harrow { fill: none; stroke: #8fa6c8; stroke-width: 1.4; stroke-dasharray: 4 3; }
+  .houseSvg .hroof { font-family: 'Source Serif 4', Georgia, serif; font-size: 19px; font-weight: 700; fill: #17356e; }
+  .houseSvg .hw { font-family: 'Source Serif 4', Georgia, serif; font-size: 12.5px; fill: #1c2a4a; }
+  .houseSvg .hw.on { fill: #b8302f; font-weight: 700; }
+  .houseSvg .hhl { fill: #fbe3c9; }
+  .houseNote { font-size: 0.93rem; margin: 12px 0 0; line-height: 1.5; }
+  .houseNote.ok { color: #2e7d4f; }
+  .houseNote.no { color: #b8302f; }
+  .houseTip { font-size: 0.9rem; line-height: 1.55; margin: 10px 0 0; color: #1c2a4a; }
   .knowBtn {
     background: #fff; border: 1.5px solid #b9c6de; border-radius: 999px;
     color: #2e7d4f; font-family: inherit; font-size: 0.78rem;
@@ -264,7 +282,7 @@
 <script>
 "use strict";
 
-const APP_VERSION = "20 (2026-08-26)";
+const APP_VERSION = "21 (2026-08-26)";
 
 // ── Skládání tvarů ──────────────────────────────────────────
 const PRONOUNS = ["je", "tu", "il", "nous", "vous", "ils"];
@@ -560,6 +578,7 @@ const DEFAULT_SETTINGS = {
   goal: 20, // denní cíl (počet otázek)
   vocabSrc: "all", // all | verbs | themes
   numStyle: "fr", // fr (Francie) | ch (Švýcarsko: septante/huitante/nonante)
+  houseHl: true, // zvýraznit v domečku sloveso z aktuální otázky
 };
 const state = {
   screen: "menu", // menu | quiz | done | stats
@@ -575,6 +594,7 @@ const state = {
   stats: loadJSON(STATS_KEY, {}),
   days: loadJSON(DAYS_KEY, {}), // "YYYY-MM-DD" → počet odpovědí
   hidden: loadJSON(HIDDEN_KEY, []), // vyřazené položky (statId: t|, s|, gr|, d|)
+  house: null, // otevřený domeček: infinitiv z aktuální otázky (nebo "")
   queue: [], // fronta statId pro režimy due/errs
   qi: 0,
   cteIdx: 0,     // čtení: index aktuálního textu
@@ -593,6 +613,7 @@ function saveSettings() {
     level: state.level, tenseIds: state.tenseIds, grp: state.grp,
     sessionLen: state.sessionLen, ans: state.ans, smart: state.smart, sound: state.sound,
     goal: state.goal, vocabSrc: state.vocabSrc, numStyle: state.numStyle,
+    houseHl: state.houseHl,
   });
 }
 
@@ -717,6 +738,66 @@ function buildNumListen(n) {
 
 // shoda příčestí s podmětem (jen u être): ms / fs / mp / fp
 const agree = (pp, g) => pp + (g === "fs" ? "e" : g === "mp" ? "s" : g === "fp" ? "es" : "");
+
+// ── „Dům slovesa être“ — jedno SVG, zvýraznění je jen CSS třída ──
+// {inf, cz, x, y, a: zarovnání textu}
+const HOUSE_LAYOUT = [
+  // horní patro
+  { inf: "naître", cz: "narodit se", x: 92, y: 128, a: "middle" },
+  { inf: "devenir", cz: "stát se", x: 180, y: 128, a: "middle" },
+  { inf: "mourir", cz: "zemřít", x: 268, y: 128, a: "middle" },
+  // dolní patro
+  { inf: "monter", cz: "jít nahoru", x: 92, y: 205, a: "middle" },
+  { inf: "rester", cz: "zůstat", x: 180, y: 232, a: "middle" },
+  { inf: "descendre", cz: "jít dolů", x: 268, y: 205, a: "middle" },
+  // venku
+  { inf: "tomber", cz: "spadnout", x: 340, y: 232, a: "middle" },
+  { inf: "arriver", cz: "přijet", x: 52, y: 300, a: "middle" },
+  { inf: "entrer", cz: "vstoupit", x: 52, y: 318, a: "middle" },
+  { inf: "aller", cz: "jít, jet", x: 150, y: 330, a: "middle" },
+  { inf: "sortir", cz: "jít ven", x: 150, y: 348, a: "middle" },
+  { inf: "partir", cz: "odejít", x: 150, y: 366, a: "middle" },
+  { inf: "venir", cz: "přijít", x: 252, y: 300, a: "middle" },
+  { inf: "revenir", cz: "vrátit se", x: 252, y: 318, a: "middle" },
+  { inf: "rentrer", cz: "vrátit se domů", x: 340, y: 300, a: "middle" },
+  { inf: "retourner", cz: "jet zpátky", x: 340, y: 318, a: "middle" },
+  { inf: "passer", cz: "projít, zastavit se", x: 180, y: 408, a: "middle" },
+];
+const HOUSE_SET = new Set(HOUSE_LAYOUT.map((h) => h.inf));
+
+function houseSVG(highlight) {
+  const hl = state.houseHl ? highlight : null;
+  const words = HOUSE_LAYOUT.map((h) => {
+    const on = h.inf === hl;
+    const w = h.inf.length * 6.4 + 10;
+    return (on ? '<rect x="' + (h.x - w / 2) + '" y="' + (h.y - 11) + '" width="' + w + '" height="15" rx="3" class="hhl"/>' : "") +
+      '<text x="' + h.x + '" y="' + h.y + '" text-anchor="' + h.a + '" class="hw' + (on ? " on" : "") + '">' + h.inf + "</text>";
+  }).join("");
+
+  return '<svg viewBox="0 0 400 425" class="houseSvg" xmlns="http://www.w3.org/2000/svg">' +
+    // střecha
+    '<path d="M20 90 L180 30 L340 90 Z" class="hline"/>' +
+    '<text x="180" y="72" text-anchor="middle" class="hroof">Être</text>' +
+    // zdi a patra
+    '<rect x="40" y="90" width="280" height="180" class="hline"/>' +
+    '<line x1="40" y1="150" x2="320" y2="150" class="hline"/>' +
+    '<line x1="136" y1="90" x2="136" y2="150" class="hline"/>' +
+    '<line x1="224" y1="90" x2="224" y2="150" class="hline"/>' +
+    // schody
+    '<path d="M64 250 L88 250 L88 232 L112 232 L112 214 L136 214 L136 196 L160 196" class="hline"/>' +
+    '<path d="M296 250 L272 250 L272 232 L248 232 L248 214 L224 214 L224 196 L200 196" class="hline"/>' +
+    // dveře
+    '<rect x="162" y="240" width="36" height="30" class="hline"/>' +
+    // šipky ven a dovnitř
+    '<path d="M52 288 L52 270 L160 270" class="harrow"/>' +
+    '<path d="M252 288 L252 270 L200 270" class="harrow"/>' +
+    '<path d="M180 272 L180 318" class="harrow"/>' +
+    '<path d="M340 288 L340 250" class="harrow"/>' +
+    '<path d="M330 214 L352 214 L352 240" class="harrow"/>' +
+    '<path d="M60 400 Q180 355 300 400" class="harrow"/>' +
+    words +
+    "</svg>";
+}
 
 function buildPcaux(pi) {
   const item = PCAUX[pi];
@@ -1345,6 +1426,11 @@ function renderQuiz() {
     html += '<button class="speakBtn" data-action="replay" aria-label="Přehrát znovu">🔊</button>';
   }
 
+  if (state.mode === "pcaux") {
+    const inf = (PCAUX[Number((q.statId || "").split("|")[1]) ] || {}).inf || "";
+    html += '<button class="houseLink" data-action="show-house" data-id="' + esc(inf) + '">🏠 domeček slovesa être</button>';
+  }
+
   if (q.answerType === "choice") {
     q.options.forEach((opt, idx) => {
       let cls = "opt";
@@ -1559,6 +1645,31 @@ function importData(file) {
   r.readAsText(file);
 }
 
+function renderHouse() {
+  const inf = state.house || "";
+  const inHouse = HOUSE_SET.has(inf);
+  let note = "";
+  if (inf && state.houseHl) {
+    note = inHouse
+      ? '<p class="houseNote ok">🏠 <b>' + esc(inf) + "</b> je v domečku → <b>être</b> (a příčestí se shoduje s podmětem).</p>"
+      : '<p class="houseNote no"><b>' + esc(inf) + "</b> v domečku <b>není</b> → <b>avoir</b> (příčestí se nemění).</p>";
+  }
+  return '<div class="topbar"><button class="back" data-action="close-house">← zpět ke cvičení</button></div>' +
+    '<h1 class="title">La maison du verbe être</h1>' +
+    '<p class="subtitle">slovesa pohybu a změny stavu → passé composé s être</p>' +
+    '<div class="card">' + houseSVG(inf) + "</div>" +
+    '<div class="card">' +
+    '<div class="labelRow"><span class="label">Zvýraznit sloveso z otázky</span></div>' +
+    chipRow([{ id: "on", label: "Zvýraznit" }, { id: "off", label: "Jen domeček" }],
+      (o) => (o.id === "on") === !!state.houseHl, "house-hl") +
+    note +
+    "</div>" +
+    '<div class="card"><span class="label">Dobré vědět</span>' +
+    '<p class="houseTip">Příčestí se u <b>être</b> shoduje s podmětem: <i>il est allé</i> · <i>elle est allée</i> · <i>ils sont allés</i> · <i>elles sont allées</i>.</p>' +
+    '<p class="houseTip"><b>monter, descendre, sortir, passer, retourner</b> jsou v domečku, ale když mají přímý předmět, jdou s <b>avoir</b>: <i>je suis sorti</i> × <i>j\'ai sorti le chien</i>.</p>' +
+    "</div>";
+}
+
 function renderHelp() {
   return '<div class="topbar"><button class="back" data-action="menu">← menu</button></div>' +
     '<h1 class="title">Nápověda</h1>' +
@@ -1576,6 +1687,7 @@ function renderHelp() {
     '<p><b>Diktát (dictée)</b> — přehraje se celá věta francouzsky (klidně opakovaně), ty ji napíšeš. Vyhodnocení po slovech: zeleně správně, oranžově jen chybějící akcent, červeně chyba.</p>' +
     '<p><b>Časování</b> — sloveso, osoba a čas; vybereš (nebo napíšeš) správný tvar. Které časy se procvičují, si zvolíš v nastavení.</p>' +
     '<p><b>Passé composé: être × avoir</b> — doplňuješ celý tvar do věty a vybíráš ze čtyř možností, které se liší právě pomocným slovesem a shodou (<i>est allée</i> × <i>a allé</i> × <i>est allé</i>…). V jednom kole se střídají slovesa z „domečku“ (🏠 pohyb a změna stavu → <i>être</i> + shoda s podmětem: <i>elle est allée</i>, <i>ils sont venus</i>) se slovesy mimo domeček (→ <i>avoir</i>, příčestí se nemění: <i>j\'ai fait le ménage</i>), takže je ten rozdíl vidět vedle sebe. Po odpovědi se ukáže, do které skupiny sloveso patří.</p>' +
+    '<p>V tomhle cvičení je tlačítko <b>🏠 domeček slovesa être</b> — otevře schéma se všemi slovesy, která jdou s <i>être</i>. Uvnitř si přepneš, jestli se má sloveso z právě řešené otázky v domečku zvýraznit (nápověda), nebo jestli chceš vidět jen čistý domeček bez napovídání. Volba se pamatuje.</p>' +
     '<p><b>Passé composé × imparfait</b> — věta s mezerou, vybíráš mezi dvěma tvary. Po odpovědi se ukáže, <i>proč</i> je správně zrovna tenhle čas (signální slova jako <i>tous les étés</i>, <i>soudain</i>, <i>d\'habitude</i>…).</p>' +
     '<p><b>Slovíčka</b> — překlad oběma směry. V nastavení si vybereš zdroj: jen slovesa, jen tematická zásoba (jídlo, rodina, čas, barvy, cestování, počasí, oblečení, práce, pocity…), nebo obojí.</p>' +
     '<p><b>Porozumění textu (DELF)</b> — krátký text (e-mail, inzerát, článek…) a otázky francouzsky, jako u zkoušky. Text zůstává během otázek nahoře. Nabízejí se texty do tvé úrovně včetně (na B2 tedy i A1–B1 — nižší úroveň textu neuškodí).</p>' +
@@ -1611,6 +1723,7 @@ function render() {
   else if (state.screen === "quiz") app.innerHTML = renderQuiz();
   else if (state.screen === "stats") app.innerHTML = renderStats();
   else if (state.screen === "help") app.innerHTML = renderHelp();
+  else if (state.screen === "house") app.innerHTML = renderHouse();
   else app.innerHTML = renderDone();
   const inp = document.getElementById("typeInput");
   if (inp) inp.focus();
@@ -1648,6 +1761,9 @@ app.addEventListener("click", (e) => {
   else if (action === "menu") { state.screen = "menu"; render(); }
   else if (action === "show-stats") { state.screen = "stats"; render(); }
   else if (action === "show-help") { state.screen = "help"; render(); }
+  else if (action === "show-house") { state.house = id || ""; state.screen = "house"; render(); }
+  else if (action === "close-house") { state.screen = "quiz"; render(); }
+  else if (action === "house-hl") { state.houseHl = id === "on"; saveSettings(); render(); }
   else if (action === "clear-history") {
     state.history = [];
     try { localStorage.removeItem(HIST_KEY); } catch {}

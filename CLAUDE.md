@@ -63,6 +63,10 @@ vaty. Chyby přiznej rovnou. Cílové uživatelce appky se říká „QA".
     mají prioritní seznam + fallback přes všechny kombinace, aby vyšly vždy
     4 unikátní možnosti. `avoirCOD: true` = sloveso z domečku, které má
     v té větě přímý předmět, takže jde s avoir (j'ai sorti le chien).
+    K režimu patří obrazovka „domečku“ (`renderHouse()` + `houseSVG()`):
+    jedno inline SVG, slovesa a jejich souřadnice jsou v `HOUSE_LAYOUT`,
+    zvýraznění aktuálního slovesa je jen CSS třída (volitelné, `state.houseHl`,
+    ukládá se do nastavení). Obrázek se nikdy negeneruje po variantách.
   - `SWISS` — helvétismes: `{ch, fr, cz, cat, note?}`; režim `swiss`, statId
     `sw|i`, bez úrovní (rozdíly jsou praktické, ne úrovňové). POZOR na fakta:
     septante/nonante platí v celé Romandii včetně Ženevy, ale huitante jen
