@@ -55,9 +55,14 @@ vaty. Chyby přiznej rovnou. Cílové uživatelce appky se říká „QA".
   - `VOCAB` — tematická slovíčka: `{fr, cz, lvl, th (téma česky)}`; `fr` unikátní
     napříč VOCAB (statId je `v|fr`, sdílený se slovesy). Distraktory se berou
     přednostně ze stejného tématu.
-  - Režim `aux` (Être/Avoir) nemá vlastní data — čte `aux` z `VERBS`;
-    statId `a|<inf>`, poznámky k domu être jsou v `HOUSE_NOTE` v index.html.
-    Výběr je vyvážený 50/50, protože sloves s être je jen ~18.
+  - `PCAUX` — passé composé être×avoir ve větě: `{s (věta s ___), inf, p (0–5),
+    g ("ms"|"fs"|"mp"|"fp" = rod/číslo podmětu pro shodu), avoirCOD?, why?}`.
+    Tvar i distraktory generuje `buildPcaux()` z `VERBS` (aux + pp + `agree()`).
+    Výběr střídá domeček/mimo 50/50, aby byl rozdíl vidět vedle sebe.
+    POZOR: u `g:"ms"` je shoda prázdná, takže se varianty slévají — distraktory
+    mají prioritní seznam + fallback přes všechny kombinace, aby vyšly vždy
+    4 unikátní možnosti. `avoirCOD: true` = sloveso z domečku, které má
+    v té větě přímý předmět, takže jde s avoir (j'ai sorti le chien).
   - `SWISS` — helvétismes: `{ch, fr, cz, cat, note?}`; režim `swiss`, statId
     `sw|i`, bez úrovní (rozdíly jsou praktické, ne úrovňové). POZOR na fakta:
     septante/nonante platí v celé Romandii včetně Ženevy, ale huitante jen
