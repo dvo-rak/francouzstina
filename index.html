@@ -235,12 +235,19 @@
   }
   .hideLink:hover { color: #b8302f; }
   .houseLink {
-    display: block; width: 100%; margin-top: 4px;
+    display: block; width: 100%; margin-top: 14px;
     background: #fff; border: 1.5px dashed #b9c6de; border-radius: 10px;
     font-family: inherit; font-size: 0.92rem; color: #17356e;
     padding: 9px; cursor: pointer;
   }
   .houseLink:hover { border-color: #17356e; }
+  .houseLink.open { border-style: solid; border-color: #17356e; border-bottom-left-radius: 0; border-bottom-right-radius: 0; margin-bottom: 0; }
+  .housePanel {
+    border: 1.5px solid #17356e; border-top: none;
+    border-radius: 0 0 10px 10px; padding: 10px 14px 14px;
+    background: #fdfcf7;
+  }
+  .houseCtl { margin-top: 4px; }
   .houseSvg { width: 100%; height: auto; display: block; }
   .houseSvg .hline { fill: none; stroke: #17356e; stroke-width: 1.6; }
   .houseSvg .harrow { fill: none; stroke: #8fa6c8; stroke-width: 1.4; stroke-dasharray: 4 3; }
@@ -282,7 +289,7 @@
 <script>
 "use strict";
 
-const APP_VERSION = "21 (2026-08-26)";
+const APP_VERSION = "22 (2026-08-26)";
 
 // ── Skládání tvarů ──────────────────────────────────────────
 const PRONOUNS = ["je", "tu", "il", "nous", "vous", "ils"];
@@ -594,7 +601,7 @@ const state = {
   stats: loadJSON(STATS_KEY, {}),
   days: loadJSON(DAYS_KEY, {}), // "YYYY-MM-DD" → počet odpovědí
   hidden: loadJSON(HIDDEN_KEY, []), // vyřazené položky (statId: t|, s|, gr|, d|)
-  house: null, // otevřený domeček: infinitiv z aktuální otázky (nebo "")
+  houseOpen: false, // rozbalený panel s domečkem (resetuje se u každé otázky)
   queue: [], // fronta statId pro režimy due/errs
   qi: 0,
   cteIdx: 0,     // čtení: index aktuálního textu
@@ -1172,6 +1179,7 @@ function start(mode) {
   state.q = makeQuestion();
   state.picked = null;
   state.accentWarn = false;
+  state.houseOpen = false;
   state.screen = "quiz";
   render();
   if (state.q && state.q.audio) speak(state.q.audio);
@@ -1240,6 +1248,7 @@ function next() {
     state.q = makeQuestion();
     state.picked = null;
     state.accentWarn = false;
+    state.houseOpen = false;
     if (!state.q) { finish(); return; }
     render();
     if (state.q.audio) speak(state.q.audio);
@@ -1258,6 +1267,7 @@ function next() {
   state.q = makeQuestion();
   state.picked = null;
   state.accentWarn = false;
+  state.houseOpen = false;
   render();
   if (state.q && state.q.audio) speak(state.q.audio);
 }
@@ -1426,11 +1436,6 @@ function renderQuiz() {
     html += '<button class="speakBtn" data-action="replay" aria-label="Přehrát znovu">🔊</button>';
   }
 
-  if (state.mode === "pcaux") {
-    const inf = (PCAUX[Number((q.statId || "").split("|")[1]) ] || {}).inf || "";
-    html += '<button class="houseLink" data-action="show-house" data-id="' + esc(inf) + '">🏠 domeček slovesa être</button>';
-  }
-
   if (q.answerType === "choice") {
     q.options.forEach((opt, idx) => {
       let cls = "opt";
@@ -1466,6 +1471,30 @@ function renderQuiz() {
       (q.prefix ? esc(q.prefix) + " " : "") +
       (ok ? "<b>" + esc(state.picked) + "</b>" : '<span class="wrong">' + esc(state.picked) + "</span>") +
       "</div>";
+  }
+
+  // 🏠 domeček jako rozbalovací nápověda pod možnostmi (jen v pcaux)
+  if (state.mode === "pcaux") {
+    const inf = (PCAUX[Number((q.statId || "").split("|")[1])] || {}).inf || "";
+    html += '<button class="houseLink' + (state.houseOpen ? " open" : "") + '" data-action="toggle-house">' +
+      (state.houseOpen ? "🏠 skrýt domeček ▲" : "🏠 domeček slovesa être ▼") + "</button>";
+    if (state.houseOpen) {
+      const inHouse = HOUSE_SET.has(inf);
+      let note = "";
+      if (inf && state.houseHl) {
+        note = inHouse
+          ? '<p class="houseNote ok">🏠 <b>' + esc(inf) + "</b> je v domečku → <b>être</b> (příčestí se shoduje s podmětem).</p>"
+          : '<p class="houseNote no"><b>' + esc(inf) + "</b> v domečku <b>není</b> → <b>avoir</b> (příčestí se nemění).</p>";
+      }
+      html += '<div class="housePanel">' + houseSVG(inf) +
+        '<div class="houseCtl">' +
+        chipRow([{ id: "on", label: "Zvýraznit sloveso" }, { id: "off", label: "Jen domeček" }],
+          (o) => (o.id === "on") === !!state.houseHl, "house-hl") +
+        note +
+        '<p class="houseTip">Shoda u être: <i>il est allé</i> · <i>elle est allée</i> · <i>ils sont allés</i> · <i>elles sont allées</i>.</p>' +
+        '<p class="houseTip"><b>monter, descendre, sortir, passer, retourner</b> jsou v domečku, ale s přímým předmětem jdou s <b>avoir</b>: <i>je suis sorti</i> × <i>j\'ai sorti le chien</i>.</p>' +
+        "</div></div>";
+    }
   }
 
   if (state.picked !== null) {
@@ -1645,31 +1674,6 @@ function importData(file) {
   r.readAsText(file);
 }
 
-function renderHouse() {
-  const inf = state.house || "";
-  const inHouse = HOUSE_SET.has(inf);
-  let note = "";
-  if (inf && state.houseHl) {
-    note = inHouse
-      ? '<p class="houseNote ok">🏠 <b>' + esc(inf) + "</b> je v domečku → <b>être</b> (a příčestí se shoduje s podmětem).</p>"
-      : '<p class="houseNote no"><b>' + esc(inf) + "</b> v domečku <b>není</b> → <b>avoir</b> (příčestí se nemění).</p>";
-  }
-  return '<div class="topbar"><button class="back" data-action="close-house">← zpět ke cvičení</button></div>' +
-    '<h1 class="title">La maison du verbe être</h1>' +
-    '<p class="subtitle">slovesa pohybu a změny stavu → passé composé s être</p>' +
-    '<div class="card">' + houseSVG(inf) + "</div>" +
-    '<div class="card">' +
-    '<div class="labelRow"><span class="label">Zvýraznit sloveso z otázky</span></div>' +
-    chipRow([{ id: "on", label: "Zvýraznit" }, { id: "off", label: "Jen domeček" }],
-      (o) => (o.id === "on") === !!state.houseHl, "house-hl") +
-    note +
-    "</div>" +
-    '<div class="card"><span class="label">Dobré vědět</span>' +
-    '<p class="houseTip">Příčestí se u <b>être</b> shoduje s podmětem: <i>il est allé</i> · <i>elle est allée</i> · <i>ils sont allés</i> · <i>elles sont allées</i>.</p>' +
-    '<p class="houseTip"><b>monter, descendre, sortir, passer, retourner</b> jsou v domečku, ale když mají přímý předmět, jdou s <b>avoir</b>: <i>je suis sorti</i> × <i>j\'ai sorti le chien</i>.</p>' +
-    "</div>";
-}
-
 function renderHelp() {
   return '<div class="topbar"><button class="back" data-action="menu">← menu</button></div>' +
     '<h1 class="title">Nápověda</h1>' +
@@ -1687,7 +1691,7 @@ function renderHelp() {
     '<p><b>Diktát (dictée)</b> — přehraje se celá věta francouzsky (klidně opakovaně), ty ji napíšeš. Vyhodnocení po slovech: zeleně správně, oranžově jen chybějící akcent, červeně chyba.</p>' +
     '<p><b>Časování</b> — sloveso, osoba a čas; vybereš (nebo napíšeš) správný tvar. Které časy se procvičují, si zvolíš v nastavení.</p>' +
     '<p><b>Passé composé: être × avoir</b> — doplňuješ celý tvar do věty a vybíráš ze čtyř možností, které se liší právě pomocným slovesem a shodou (<i>est allée</i> × <i>a allé</i> × <i>est allé</i>…). V jednom kole se střídají slovesa z „domečku“ (🏠 pohyb a změna stavu → <i>être</i> + shoda s podmětem: <i>elle est allée</i>, <i>ils sont venus</i>) se slovesy mimo domeček (→ <i>avoir</i>, příčestí se nemění: <i>j\'ai fait le ménage</i>), takže je ten rozdíl vidět vedle sebe. Po odpovědi se ukáže, do které skupiny sloveso patří.</p>' +
-    '<p>V tomhle cvičení je tlačítko <b>🏠 domeček slovesa être</b> — otevře schéma se všemi slovesy, která jdou s <i>être</i>. Uvnitř si přepneš, jestli se má sloveso z právě řešené otázky v domečku zvýraznit (nápověda), nebo jestli chceš vidět jen čistý domeček bez napovídání. Volba se pamatuje.</p>' +
+    '<p>V tomhle cvičení je pod možnostmi tlačítko <b>🏠 domeček slovesa être</b> — rozbalí přímo pod otázkou schéma se všemi slovesy, která jdou s <i>être</i>. U každé nové otázky je zase sbalené, ať je to nápověda, po které sáhneš, když ji potřebuješ. Uvnitř si přepneš, jestli se má sloveso z právě řešené otázky zvýraznit, nebo jestli chceš vidět jen čistý domeček bez napovídání — tahle volba se pamatuje.</p>' +
     '<p><b>Passé composé × imparfait</b> — věta s mezerou, vybíráš mezi dvěma tvary. Po odpovědi se ukáže, <i>proč</i> je správně zrovna tenhle čas (signální slova jako <i>tous les étés</i>, <i>soudain</i>, <i>d\'habitude</i>…).</p>' +
     '<p><b>Slovíčka</b> — překlad oběma směry. V nastavení si vybereš zdroj: jen slovesa, jen tematická zásoba (jídlo, rodina, čas, barvy, cestování, počasí, oblečení, práce, pocity…), nebo obojí.</p>' +
     '<p><b>Porozumění textu (DELF)</b> — krátký text (e-mail, inzerát, článek…) a otázky francouzsky, jako u zkoušky. Text zůstává během otázek nahoře. Nabízejí se texty do tvé úrovně včetně (na B2 tedy i A1–B1 — nižší úroveň textu neuškodí).</p>' +
@@ -1723,7 +1727,6 @@ function render() {
   else if (state.screen === "quiz") app.innerHTML = renderQuiz();
   else if (state.screen === "stats") app.innerHTML = renderStats();
   else if (state.screen === "help") app.innerHTML = renderHelp();
-  else if (state.screen === "house") app.innerHTML = renderHouse();
   else app.innerHTML = renderDone();
   const inp = document.getElementById("typeInput");
   if (inp) inp.focus();
@@ -1761,8 +1764,7 @@ app.addEventListener("click", (e) => {
   else if (action === "menu") { state.screen = "menu"; render(); }
   else if (action === "show-stats") { state.screen = "stats"; render(); }
   else if (action === "show-help") { state.screen = "help"; render(); }
-  else if (action === "show-house") { state.house = id || ""; state.screen = "house"; render(); }
-  else if (action === "close-house") { state.screen = "quiz"; render(); }
+  else if (action === "toggle-house") { state.houseOpen = !state.houseOpen; render(); }
   else if (action === "house-hl") { state.houseHl = id === "on"; saveSettings(); render(); }
   else if (action === "clear-history") {
     state.history = [];
