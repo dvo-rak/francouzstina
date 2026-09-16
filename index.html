@@ -116,6 +116,7 @@
   .opt.dim { opacity: 0.5; }
 
   .typeRow { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
+  .typePrefix.elided { margin-right: -6px; }
   .typePrefix { font-size: 1.1rem; color: #17356e; font-weight: 600; white-space: nowrap; }
   .typeInput {
     flex: 1; min-width: 0;
@@ -289,7 +290,7 @@
 <script>
 "use strict";
 
-const APP_VERSION = "23 (2026-08-26)";
+const APP_VERSION = "24 (2026-09-16)";
 
 // ── Skládání tvarů ──────────────────────────────────────────
 const PRONOUNS = ["je", "tu", "il", "nous", "vous", "ils"];
@@ -355,10 +356,14 @@ function conjDisplay(verb, tenseId, i) {
 }
 
 // prefix pro psací režim (zájmeno, u subj s "que")
-function typePrefix(tenseId, i) {
-  const p = PRONOUNS[i];
-  if (tenseId !== "subj") return p;
-  return (p === "il" || p === "ils" ? "qu'" : "que ") + p;
+// prefix vlevo od psacího pole; u „je“ + samohlásky elize → j'
+// (elided: true znamená, že se apostrof lepí přímo na pole bez mezery)
+function typePrefix(tenseId, i, bare) {
+  const elide = i === 0 && bare && startsVowel(bare);
+  const p = elide ? "j'" : PRONOUNS[i];
+  if (tenseId !== "subj") return { text: p, elided: elide };
+  const q = p === "il" || p === "ils" ? "qu'" : "que ";
+  return { text: q + p, elided: elide };
 }
 
 // ── Čísla 0–100 ─────────────────────────────────────────────
@@ -656,13 +661,17 @@ function buildConj(verb, tense, i) {
     statId: "c|" + verb.inf + "|" + tense,
     prompt: verb.inf,
     sub: verb.cz + " · " + TENSE_LABEL[tense],
-    big: (tense === "subj" ? typePrefix("subj", i) : PRONOUNS[i]) + " … ?",
+    big: (tense === "subj" ? (i === 2 || i === 5 ? "qu'" : "que ") + PRONOUNS[i] : PRONOUNS[i]) + " … ?",
     correct,
   };
   if (state.ans === "text") {
     q.answerType = "text";
-    q.prefix = typePrefix(tense, i);
-    q.accepted = [conjBare(verb, tense, i)];
+    const bare = conjBare(verb, tense, i);
+    const pref = typePrefix(tense, i, bare);
+    q.prefix = pref.text;
+    q.prefixElided = pref.elided;
+    // uznej samotný tvar i celý tvar se zájmenem (j'ai répondu)
+    q.accepted = [bare, joinPronoun(i, bare)];
   } else {
     q.answerType = "choice";
     const set = new Set();
@@ -1449,7 +1458,7 @@ function renderQuiz() {
     });
   } else if (state.picked === null) {
     html += '<div class="typeRow">' +
-      (q.prefix ? '<span class="typePrefix">' + esc(q.prefix) + "</span>" : "") +
+      (q.prefix ? '<span class="typePrefix' + (q.prefixElided ? " elided" : "") + '">' + esc(q.prefix) + "</span>" : "") +
       '<input class="typeInput" id="typeInput" autocomplete="off" autocapitalize="off" spellcheck="false"' +
       (q.inputMode ? ' inputmode="' + q.inputMode + '"' : "") + ">" +
       '<button class="typeOk" data-action="submit-typed">OK</button></div>';
@@ -1468,7 +1477,7 @@ function renderQuiz() {
   } else {
     const ok = state.accentWarn || matchTyped(state.picked, q.accepted) > 0;
     html += '<div class="typedAnswer">' +
-      (q.prefix ? esc(q.prefix) + " " : "") +
+      (q.prefix ? esc(q.prefix) + (q.prefixElided ? "" : " ") : "") +
       (ok ? "<b>" + esc(state.picked) + "</b>" : '<span class="wrong">' + esc(state.picked) + "</span>") +
       "</div>";
   }

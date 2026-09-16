@@ -95,6 +95,18 @@ vaty. Chyby přiznej rovnou. Cílové uživatelce appky se říká „QA".
 `state.numStyle` ("fr"|"ch") vybírá přes `numWord()`; při psaní
 `numAccepted()` uznává obě formy (kvůli ženevskému quatre-vingts).
 
+## Elize u „je“ (index.html)
+
+V psacím režimu vrací `typePrefix(tense, i, bare)` objekt
+`{text, elided}` — u 1. os. j. č. před samohláskou je prefix `j'`
+(u subjonctivu `que j'`) a lepí se na pole bez mezery (CSS
+`.typePrefix.elided`). Týká se ~25 % kombinací sloveso×čas
+(všechna avoir slovesa v PC, imparfait, futur simple, conditionnel,
+subjonctif, présent sloves na samohlásku). `accepted` obsahuje
+samotný tvar i celý tvar se zájmenem. V režimu s výběrem se prefix
+nepoužívá a zadání zůstává „je … ?“ — elize by prozradila správnou
+možnost.
+
 ## SRS, fronty a streak (index.html)
 
 - `recStat` vede Leitner SRS: každá položka `{o, b, box 1–5, due}`;
