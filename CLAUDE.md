@@ -48,7 +48,11 @@ vaty. Chyby přiznej rovnou. Cílové uživatelce appky se říká „QA".
   - `NOUNS` — rody: `{n, lvl?, g: "m"|"f", cz}` (bez `lvl` = A2). Vybírej zrádná slova.
   - `GRAMMAR` — doplňování: `{lvl, topic (česky), s (věta s ___), o[], c, why?}`;
     `c` musí být přesný řetězec z `o`. Obecný engine pro libovolná gramatická
-    témata — nová témata = jen data.
+    témata — nová témata = jen data. Téma může mít i vlastní samostatné
+    cvičení: režim `art` (Stažené členy) = GRAMMAR filtrovaný na
+    `topic === ART_TOPIC`; statId zůstává `gr|i`, takže statistiky,
+    SRS i vyřazování fungují bez úprav a položky chodí i v běžné Gramatice.
+    Další takové téma = konstanta + větev v makeQuestion + tlačítko.
   - `DICT` — diktáty: `{lvl, s}` (celá věta pro TTS; vyhodnocení po slovech,
     tolerantní k interpunkci/velikosti/apostrofům psaným mezerou; akcenty
     jen varují).

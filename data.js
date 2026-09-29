@@ -1507,6 +1507,37 @@ const GRAMMAR = [
   { lvl: "B2", topic: "Trpný rod", s: "Ce roman a été ___ par Camus.", o: ["écrit", "écrire", "écrivant"], c: "écrit" },
   { lvl: "B2", topic: "Časy", s: "Quand je suis arrivé, le film ___ déjà commencé.", o: ["avait", "a", "est"], c: "avait", why: "Děj před jiným minulým dějem → plus-que-parfait." },
   { lvl: "B2", topic: "Shoda", s: "Les fleurs que j'ai ___ sont belles.", o: ["achetées", "acheté", "achetés"], c: "achetées", why: "Shoda příčestí s COD stojícím před slovesem (les fleurs, ž. mn.)." },
+  // ── Stažené členy (articles contractés) — samostatné cvičení „art“ ──
+  // à + le → au, à + les → aux, de + le → du, de + les → des;
+  // à la / à l' / de la / de l' se nestahují
+  { lvl: "A1", topic: "Stažené členy", s: "Je vais ___ cinéma ce soir.", o: ["au", "à le", "à la"], c: "au", why: "à + le → au (le cinéma)." },
+  { lvl: "A1", topic: "Stažené členy", s: "Elle travaille ___ gare.", o: ["à la", "au", "à le"], c: "à la", why: "La gare je ženského rodu → à la se nestahuje." },
+  { lvl: "A1", topic: "Stažené členy", s: "Nous allons ___ école à pied.", o: ["à l'", "au", "à la"], c: "à l'", why: "Před samohláskou → à l', nic se nestahuje." },
+  { lvl: "A1", topic: "Stažené členy", s: "Il parle ___ enfants.", o: ["aux", "à les", "des"], c: "aux", why: "à + les → aux." },
+  { lvl: "A1", topic: "Stažené členy", s: "Je viens ___ marché.", o: ["du", "de le", "de la"], c: "du", why: "de + le → du (le marché)." },
+  { lvl: "A1", topic: "Stažené členy", s: "C'est la voiture ___ professeur.", o: ["du", "de le", "au"], c: "du", why: "de + le → du." },
+  { lvl: "A1", topic: "Stažené členy", s: "La porte ___ maison est ouverte.", o: ["de la", "du", "de le"], c: "de la", why: "La maison je ženského rodu → de la se nestahuje." },
+  { lvl: "A1", topic: "Stažené členy", s: "Le prix ___ billets est élevé.", o: ["des", "de les", "aux"], c: "des", why: "de + les → des." },
+  { lvl: "A1", topic: "Stažené členy", s: "On mange ___ restaurant.", o: ["au", "à le", "du"], c: "au", why: "à + le → au (le restaurant)." },
+  { lvl: "A2", topic: "Stažené členy", s: "Il joue ___ football le samedi.", o: ["au", "du", "à le"], c: "au", why: "jouer À + sport → au football." },
+  { lvl: "A2", topic: "Stažené členy", s: "Elle joue ___ piano depuis dix ans.", o: ["du", "au", "de le"], c: "du", why: "jouer DE + hudební nástroj → du piano." },
+  { lvl: "A2", topic: "Stažené členy", s: "Tu joues ___ cartes ?", o: ["aux", "des", "à les"], c: "aux", why: "jouer À + les cartes → aux cartes." },
+  { lvl: "A2", topic: "Stažené členy", s: "Je vais ___ Portugal cet été.", o: ["au", "en", "à le"], c: "au", why: "Země mužského rodu → au (le Portugal)." },
+  { lvl: "A2", topic: "Stažené členy", s: "Ils habitent ___ États-Unis.", o: ["aux", "en", "au"], c: "aux", why: "Země v množném čísle → aux (les États-Unis)." },
+  { lvl: "A2", topic: "Stažené členy", s: "Elle revient ___ Japon demain.", o: ["du", "de", "de le"], c: "du", why: "venir de + země mužského rodu → du Japon (ale de France)." },
+  { lvl: "A2", topic: "Stažené členy", s: "Nous rentrons ___ États-Unis.", o: ["des", "de les", "aux"], c: "des", why: "de + les → des." },
+  { lvl: "A2", topic: "Stažené členy", s: "J'ai mal ___ dents.", o: ["aux", "des", "à les"], c: "aux", why: "avoir mal À + les dents → aux dents." },
+  { lvl: "A2", topic: "Stažené členy", s: "Il a mal ___ ventre.", o: ["au", "du", "à le"], c: "au", why: "avoir mal À + le ventre → au ventre." },
+  { lvl: "A2", topic: "Stažené členy", s: "Ils parlent ___ vacances.", o: ["des", "aux", "de les"], c: "des", why: "parler DE + les vacances → des." },
+  { lvl: "A2", topic: "Stažené členy", s: "Je pense ___ examen de demain.", o: ["à l'", "au", "de l'"], c: "à l'", why: "penser À + samohláska → à l', nestahuje se." },
+  { lvl: "A2", topic: "Stažené členy", s: "C'est le livre ___ étudiante.", o: ["de l'", "de la", "du"], c: "de l'", why: "Před samohláskou → de l', nestahuje se." },
+  { lvl: "B1", topic: "Stažené členy", s: "Je bois ___ café tous les matins.", o: ["du", "au", "de le"], c: "du", why: "Pozor: tady du NENÍ stažení, ale dělivý člen (neurčité množství kávy)." },
+  { lvl: "B1", topic: "Stažené členy", s: "Je sors ___ café d'en face.", o: ["du", "de", "au"], c: "du", why: "Tady du JE stažení: sortir DE + le café (podnik) → du." },
+  { lvl: "B1", topic: "Stažené členy", s: "Elle a peur ___ chiens du voisin.", o: ["des", "aux", "de les"], c: "des", why: "avoir peur DE + les chiens → des." },
+  { lvl: "B1", topic: "Stažené členy", s: "Elle s'intéresse ___ art moderne.", o: ["à l'", "à la", "au"], c: "à l'", why: "s'intéresser À + samohláska → à l'." },
+  { lvl: "B1", topic: "Stažené členy", s: "Nous avons assisté ___ concert hier.", o: ["au", "du", "à le"], c: "au", why: "assister À qqch → au concert." },
+  { lvl: "B1", topic: "Stažené členy", s: "Il s'occupe ___ enfants de sa sœur.", o: ["des", "aux", "de les"], c: "des", why: "s'occuper DE qqn → des enfants." },
+  { lvl: "B1", topic: "Stažené členy", s: "Je ne me souviens pas ___ nom du film.", o: ["du", "au", "de le"], c: "du", why: "se souvenir DE + le nom → du." },
 ];
 
 // ─────────────────────────────────────────────────────────────

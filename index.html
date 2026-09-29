@@ -290,7 +290,7 @@
 <script>
 "use strict";
 
-const APP_VERSION = "25 (2026-09-16)";
+const APP_VERSION = "26 (2026-09-29)";
 
 // ── Skládání tvarů ──────────────────────────────────────────
 const PRONOUNS = ["je", "tu", "il", "nous", "vous", "ils"];
@@ -420,8 +420,10 @@ const MODE_LABEL = {
   mix: "Mix", conj: "Časování", frcz: "FR → ČJ", czfr: "ČJ → FR",
   sent: "PC × Imparfait", num: "Čísla", gen: "Rody", cete: "Čtení",
   gram: "Gramatika", dict: "Diktát", due: "Opakování", errs: "Moje chyby",
-  swiss: "Švýcarská fr.", pcaux: "PC: être × avoir",
+  swiss: "Švýcarská fr.", pcaux: "PC: être × avoir", art: "Stažené členy",
 };
+// témata GRAMMAR, která mají vlastní samostatné cvičení
+const ART_TOPIC = "Stažené členy";
 const GRP_LABEL = { all: "všechna", irr: "nepravidelná", reg: "pravidelná" };
 const LENGTHS = [
   { id: 10, label: "10" }, { id: 25, label: "25" },
@@ -1065,6 +1067,15 @@ function makeQuestion() {
       return q;
     }
 
+    if (mode === "art") {
+      const idxs = idxPool(GRAMMAR, "gr|", (i) => GRAMMAR[i].topic === ART_TOPIC && lvlOk(GRAMMAR[i].lvl, "B1"));
+      const cands = Array.from({ length: K }, () => pick(idxs));
+      const gi = sampleWeighted(cands, (i) => "gr|" + i);
+      const q = buildGram(gi);
+      if (q.key === prevKey) continue;
+      return q;
+    }
+
     if (mode === "dict") {
       const idxs = idxPool(DICT, "d|", (i) => lvlOk(DICT[i].lvl, "B1"));
       const cands = Array.from({ length: K }, () => pick(idxs));
@@ -1380,6 +1391,7 @@ function renderMenu() {
     '<span class="label secLabel">Cvičení</span>' +
     '<button class="modeBtn" data-action="start" data-id="conj">Časování<small>nous + prendre → nous prenons</small></button>' +
     '<button class="modeBtn" data-action="start" data-id="gram">Gramatika<small>členy, předložky, zájmena, subjonctif… doplň do věty</small></button>' +
+    '<button class="modeBtn" data-action="start" data-id="art">Stažené členy<small>au, aux, du, des — à + le → au, de + les → des</small></button>' +
     (LVL[state.level] >= LVL.A2 ? '<button class="modeBtn" data-action="start" data-id="pcaux">Passé composé: être × avoir<small>🏠 domeček i slovesa mimo něj — rozdíl vedle sebe</small></button>' : "") +
     (LVL[state.level] >= LVL.A2 ? '<button class="modeBtn" data-action="start" data-id="sent">Passé composé × imparfait<small>doplň správný čas do věty</small></button>' : "") +
     '<button class="modeBtn" data-action="start" data-id="frcz">Slovíčka: francouzsky → česky<small>mettre → dát, položit</small></button>' +
@@ -1698,6 +1710,7 @@ function renderHelp() {
     '<p><b>📅 K zopakování dnes</b> — appka plánuje opakování jako kartičky (Leitner): každá položka má krabičku 1–5; správná odpověď ji posune výš (opakuje se za 1 / 3 / 7 / 14 / 30 dní), chyba ji vrátí do krabičky 1. Tlačítko se objeví, jen když je dnes co opakovat, a ukáže počet.</p>' +
     '<p><b>🔁 Moje chyby</b> — rychlé kolo jen z položek, kde se v poslední době chybovalo.</p>' +
     '<p><b>Gramatika</b> — doplňování do vět podle témat tvé úrovně: členy, předložky, zápor, zájmena (COD/COI, y/en), srovnávání, vztažná zájmena, podmínky, subjonctif… Po odpovědi krátké vysvětlení.</p>' +
+    '<p><b>Stažené členy (articles contractés)</b> — samostatné cvičení na splývání předložek <i>à</i> a <i>de</i> s určitým členem: <i>à + le → au</i>, <i>à + les → aux</i>, <i>de + le → du</i>, <i>de + les → des</i>. Před ženským rodem a samohláskou se nestahuje (<i>à la gare</i>, <i>à l\'école</i>, <i>de l\'eau</i>). Obsahuje i vazby se slovesy (<i>jouer au foot</i> × <i>jouer du piano</i>, <i>avoir mal aux dents</i>), země (<i>au Portugal</i>, <i>aux États-Unis</i>) a na B1 rozlišení, kdy je <i>du</i> stažení a kdy dělivý člen. Stejné položky chodí i v běžné Gramatice a v Mixu.</p>' +
     '<p><b>Diktát (dictée)</b> — přehraje se celá věta francouzsky (klidně opakovaně), ty ji napíšeš. Vyhodnocení po slovech: zeleně správně, oranžově jen chybějící akcent, červeně chyba.</p>' +
     '<p><b>Časování</b> — sloveso, osoba a čas; vybereš (nebo napíšeš) správný tvar. Které časy se procvičují, si zvolíš v nastavení.</p>' +
     '<p><b>Passé composé: être × avoir</b> — doplňuješ celý tvar do věty a vybíráš ze čtyř možností, které se liší právě pomocným slovesem a shodou (<i>est allée</i> × <i>a allé</i> × <i>est allé</i>…). V jednom kole se střídají slovesa z „domečku“ (🏠 pohyb a změna stavu → <i>être</i> + shoda s podmětem: <i>elle est allée</i>, <i>ils sont venus</i>) se slovesy mimo domeček (→ <i>avoir</i>, příčestí se nemění: <i>j\'ai fait le ménage</i>), takže je ten rozdíl vidět vedle sebe. Po odpovědi se ukáže, do které skupiny sloveso patří.</p>' +
