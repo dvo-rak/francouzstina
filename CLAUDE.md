@@ -30,8 +30,16 @@ vaty. Chyby přiznej rovnou. Cílové uživatelce appky se říká „QA".
 ## Struktura
 
 - `index.html` — celá appka: CSS + vanilla JS (žádný framework). Obrazovky:
-  menu / quiz / done / stats / help. Render = skládání HTML stringů,
+  menu / quiz / done / stats / help / settings. Render = skládání HTML stringů,
   jeden delegovaný click handler přes `data-action` atributy.
+  Menu: hlavička (úroveň jako pilulka → panel, ikony 📊 ℹ️ ⚙️), karta
+  „dnešek“ (série, Mix, due/errs), pod ní skupiny dlaždic. Dlaždice s volbami
+  (`data-action="sheet"`: conj, vocab, gram) otevřou bottom sheet
+  (`state.sheet`, jen v paměti, `renderSheet()`) s chipy a tlačítkem Začít;
+  ostatní startují rovnou. Volby týkající se jednoho režimu patří do jeho
+  sheetu, ne do ⚙️ Nastavení (`renderSettings()` = jen globální věci + záloha).
+  Historie kol je ve Statistikách (`renderHistory()`). Dlaždice Slovíčka
+  startuje `frcz`/`czfr` podle `state.vocabDir` — id režimů se nemění.
 - `data.js` — VŠECHNA data, načítá se `<script src>` před appkou:
   - Úrovně: appka má globální přepínač A1/A2/B1/B2 (`state.level`), který
     filtruje obsah přes `lvlOk()`. Datové položky mají volitelné `lvl`;
@@ -48,11 +56,12 @@ vaty. Chyby přiznej rovnou. Cílové uživatelce appky se říká „QA".
   - `NOUNS` — rody: `{n, lvl?, g: "m"|"f", cz}` (bez `lvl` = A2). Vybírej zrádná slova.
   - `GRAMMAR` — doplňování: `{lvl, topic (česky), s (věta s ___), o[], c, why?}`;
     `c` musí být přesný řetězec z `o`. Obecný engine pro libovolná gramatická
-    témata — nová témata = jen data. Téma může mít i vlastní samostatné
-    cvičení: režim `art` (Stažené členy) = GRAMMAR filtrovaný na
-    `topic === ART_TOPIC`; statId zůstává `gr|i`, takže statistiky,
-    SRS i vyřazování fungují bez úprav a položky chodí i v běžné Gramatice.
-    Další takové téma = konstanta + větev v makeQuestion + tlačítko.
+    témata — nová témata = jen data. Sheet Gramatiky nabízí chipy témat
+    dostupných na úrovni (`gramTopicsAtLevel()`), výběr je `state.gramTopics`
+    (prázdné = vše, ukládá se) a filtruje JEN režim `gram`, Mix bere vše.
+    Když vybraná témata na úrovni nic nemají, filtr se ignoruje.
+    Bývalý samostatný režim `art` (Stažené členy) je zrušený — je to teď
+    téma; `MODE_LABEL.art` zůstává kvůli staré historii.
   - `DICT` — diktáty: `{lvl, s}` (celá věta pro TTS; vyhodnocení po slovech,
     tolerantní k interpunkci/velikosti/apostrofům psaným mezerou; akcenty
     jen varují).

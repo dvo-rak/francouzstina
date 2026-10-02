@@ -278,6 +278,58 @@
   .doneMeta { color: #8391ad; font-size: 0.88rem; margin: 6px 0 20px; }
   .doneMenuBtn { text-align: center; margin-top: 10px; margin-bottom: 0; }
 
+  /* menu: hlavička, dnešek, dlaždice, panel voleb */
+  .head { display: flex; align-items: center; gap: 8px; }
+  .head .title { font-size: 2.3rem; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lvlBtn {
+    border: 1.5px solid #17356e; background: #17356e; color: #fff;
+    border-radius: 999px; padding: 4px 12px; font-family: inherit; font-size: 0.9rem; font-weight: 700; cursor: pointer;
+  }
+  .icoBtn {
+    width: 40px; height: 40px; border-radius: 10px; border: 1.5px solid #b9c6de;
+    background: #fff; font-size: 1.1rem; line-height: 1; cursor: pointer; padding: 0;
+  }
+  .ver { color: #8391ad; font-size: 0.78rem; margin: 4px 0 18px; }
+  .todayBtns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .todayBtns > button:last-child:nth-child(even) { grid-column: 1 / -1; }
+  .primary {
+    grid-column: 1 / -1; background: #17356e; color: #fff; border: none; border-radius: 10px;
+    padding: 15px 16px; font-family: inherit; font-size: 1.1rem; font-weight: 700; text-align: left; cursor: pointer;
+  }
+  .primary small { display: block; font-weight: 400; opacity: .8; font-size: 0.85rem; margin-top: 2px; }
+  .secondary {
+    background: #fff; border: 1.5px solid #b9c6de; border-radius: 10px;
+    padding: 11px 12px; font-family: inherit; font-size: 0.95rem; font-weight: 600; color: #17356e; text-align: left; cursor: pointer;
+  }
+  .secondary .n { float: right; font-variant-numeric: tabular-nums; color: #b8302f; }
+  .group { margin-top: 22px; }
+  .group > .label { display: block; margin-bottom: 8px; }
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tiles > .tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .tile {
+    position: relative; background: #fff; border: 1.5px solid #b9c6de; border-radius: 10px;
+    padding: 14px 12px; min-height: 64px; text-align: left; cursor: pointer;
+    font-family: inherit; font-size: 1rem; font-weight: 600; color: #17356e;
+    display: flex; flex-direction: column; justify-content: space-between; gap: 4px;
+  }
+  .tile:hover { border-color: #17356e; }
+  .tile:active { transform: scale(0.985); }
+  .tile .hint { font-family: 'Caveat', cursive; font-size: 1.1rem; font-weight: 500; color: #8391ad; }
+  .tile.opts::after { content: "volby ›"; position: absolute; right: 10px; bottom: 8px; font-size: 0.72rem; font-weight: 400; color: #8391ad; }
+  .scrim { position: fixed; inset: 0; background: rgba(23,53,110,.28); z-index: 10; }
+  .sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 11;
+    background: #fdfcf7; border-radius: 16px 16px 0 0; border-top: 1.5px solid #17356e;
+    padding: 10px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    max-height: 85vh; overflow-y: auto;
+  }
+  .sheetIn { max-width: 480px; margin: 0 auto; }
+  .grab { width: 40px; height: 4px; border-radius: 2px; background: #b9c6de; margin: 0 auto 12px; }
+  .sheetTitle { font-family: 'Caveat', cursive; font-size: 1.9rem; font-weight: 700; color: #17356e; margin: 0 0 2px; }
+  .sheetSub { color: #5a6b8c; font-size: 0.9rem; margin: 0; }
+  .field { margin-top: 14px; }
+  .setRow + .setRow { margin-top: 16px; }
+
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; }
   }
@@ -290,7 +342,7 @@
 <script>
 "use strict";
 
-const APP_VERSION = "26 (2026-09-29)";
+const APP_VERSION = "27 (2026-10-02)";
 
 // ── Skládání tvarů ──────────────────────────────────────────
 const PRONOUNS = ["je", "tu", "il", "nous", "vous", "ils"];
@@ -422,8 +474,6 @@ const MODE_LABEL = {
   gram: "Gramatika", dict: "Diktát", due: "Opakování", errs: "Moje chyby",
   swiss: "Švýcarská fr.", pcaux: "PC: être × avoir", art: "Stažené členy",
 };
-// témata GRAMMAR, která mají vlastní samostatné cvičení
-const ART_TOPIC = "Stažené členy";
 const GRP_LABEL = { all: "všechna", irr: "nepravidelná", reg: "pravidelná" };
 const LENGTHS = [
   { id: 10, label: "10" }, { id: 25, label: "25" },
@@ -593,9 +643,12 @@ const DEFAULT_SETTINGS = {
   vocabSrc: "all", // all | verbs | themes
   numStyle: "fr", // fr (Francie) | ch (Švýcarsko: septante/huitante/nonante)
   houseHl: true, // zvýraznit v domečku sloveso z aktuální otázky
+  vocabDir: "frcz", // frcz | czfr — směr dlaždice Slovíčka
+  gramTopics: [], // vybraná témata Gramatiky; prázdné = vše
 };
 const state = {
-  screen: "menu", // menu | quiz | done | stats
+  screen: "menu", // menu | quiz | done | stats | help | settings
+  sheet: null, // otevřený panel voleb v menu: level | conj | vocab | gram
   mode: "conj",
   ...DEFAULT_SETTINGS,
   ...loadJSON(SETTINGS_KEY, {}),
@@ -627,7 +680,7 @@ function saveSettings() {
     level: state.level, tenseIds: state.tenseIds, grp: state.grp,
     sessionLen: state.sessionLen, ans: state.ans, smart: state.smart, sound: state.sound,
     goal: state.goal, vocabSrc: state.vocabSrc, numStyle: state.numStyle,
-    houseHl: state.houseHl,
+    houseHl: state.houseHl, vocabDir: state.vocabDir, gramTopics: state.gramTopics,
   });
 }
 
@@ -1059,16 +1112,12 @@ function makeQuestion() {
     }
 
     if (mode === "gram") {
-      const idxs = idxPool(GRAMMAR, "gr|", (i) => lvlOk(GRAMMAR[i].lvl, "B1"));
-      const cands = Array.from({ length: K }, () => pick(idxs));
-      const gi = sampleWeighted(cands, (i) => "gr|" + i);
-      const q = buildGram(gi);
-      if (q.key === prevKey) continue;
-      return q;
-    }
-
-    if (mode === "art") {
-      const idxs = idxPool(GRAMMAR, "gr|", (i) => GRAMMAR[i].topic === ART_TOPIC && lvlOk(GRAMMAR[i].lvl, "B1"));
+      // výběr témat platí jen v samotné Gramatice, Mix bere všechno
+      const lvlI = (i) => lvlOk(GRAMMAR[i].lvl, "B1");
+      const tp = state.mode === "gram" ? state.gramTopics : [];
+      const inTp = (i) => lvlI(i) && tp.includes(GRAMMAR[i].topic);
+      const useTp = tp.length && GRAMMAR.some((_, i) => inTp(i));
+      const idxs = idxPool(GRAMMAR, "gr|", useTp ? inTp : lvlI);
       const cands = Array.from({ length: K }, () => pick(idxs));
       const gi = sampleWeighted(cands, (i) => "gr|" + i);
       const q = buildGram(gi);
@@ -1180,6 +1229,7 @@ function numDistractor(n) {
 
 // ── Akce ────────────────────────────────────────────────────
 function start(mode) {
+  state.sheet = null;
   state.mode = mode;
   state.score = { ok: 0, total: 0, streak: 0 };
   if (mode === "due") {
@@ -1328,95 +1378,139 @@ function chipRow(items, isOn, action) {
   ).join("") + "</div>";
 }
 
+function tile(mode, name, hint, sheet) {
+  return '<button class="tile' + (sheet ? " opts" : "") + '" data-action="' + (sheet ? "sheet" : "start") + '" data-id="' + mode + '">' +
+    esc(name) + (hint ? '<span class="hint">' + esc(hint) + "</span>" : "") + "</button>";
+}
+
 function renderMenu() {
-  const pool = getPool();
-  let html =
-    '<h1 class="title">Mon cahier de français</h1>' +
-    '<p class="subtitle">procvičování francouzštiny · úroveň ' + state.level + " · v" + APP_VERSION + "</p>";
-
-  html += '<div class="card"><span class="label">Úroveň</span>' +
-    chipRow(LEVELS.map((l) => ({ id: l, label: l })), (l) => state.level === l.id, "level") +
-    '<div style="height:14px"></div><span class="label">Slovesa (' + pool.length + ')</span>' +
-    chipRow(
-      [{ id: "all", label: "Všechna" }, { id: "irr", label: "Nepravidelná" }, { id: "reg", label: "Pravidelná" }],
-      (g) => state.grp === g.id, "grp"
-    ) +
-    '<div style="height:14px"></div><span class="label">Časy (časování)</span>' +
-    chipRow(TENSES.filter((t) => LVL[t.lvl] <= LVL[state.level]), (t) => state.tenseIds.includes(t.id), "tense") +
-    '<div style="height:14px"></div><span class="label">Počet otázek</span>' +
-    chipRow(LENGTHS, (l) => state.sessionLen === l.id, "len") +
-    '<div style="height:14px"></div><span class="label">Denní cíl</span>' +
-    chipRow([{ id: 10, label: "10" }, { id: 20, label: "20" }, { id: 50, label: "50" }], (g) => state.goal === g.id, "goal") +
-    '<div style="height:14px"></div><span class="label">Slovíčka</span>' +
-    chipRow(
-      [{ id: "all", label: "Vše" }, { id: "verbs", label: "Jen slovesa" }, { id: "themes", label: "Jen témata" }],
-      (v) => state.vocabSrc === v.id, "vocab-src"
-    ) +
-    '<div style="height:14px"></div><span class="label">Čísla 70–99</span>' +
-    chipRow(
-      [{ id: "fr", label: "🇫🇷 soixante-dix" }, { id: "ch", label: "🇨🇭 septante" }],
-      (s) => state.numStyle === s.id, "num-style"
-    ) +
-    '<div style="height:14px"></div><span class="label">Další volby</span>' +
-    chipRow(
-      [
-        { id: "ans", label: state.ans === "text" ? "✍ psaní odpovědí" : "✍ psaní odpovědí" },
-        { id: "smart", label: "🧠 chytré opakování" },
-        ...(TTS_OK ? [{ id: "sound", label: "🔊 zvuk" }] : []),
-      ],
-      (o) => (o.id === "ans" ? state.ans === "text" : state[o.id]),
-      "toggle"
-    ) +
-    (state.sound && TTS_OK ? (() => {
-      const d = voiceDiag();
-      return d ? '<p class="voiceDiag' + (d.ok ? "" : " warn") + '">' + esc(d.msg) + "</p>" : "";
-    })() : "") +
-    "</div>";
-
+  const a2 = LVL[state.level] >= LVL.A2;
   const si = streakInfo();
   const nDue = dueIds().length;
   const nErr = errIds().length;
-  html += '<span class="label secLabel">Denní trénink</span>';
-  html += '<div class="card streakCard">' +
-    '<div class="streakLine">🔥 Série: <b>' + si.streak + "</b> " + (si.streak === 1 ? "den" : si.streak >= 2 && si.streak <= 4 ? "dny" : "dní") +
-    ' · dnes <b>' + si.today + "</b> / " + state.goal + "</div>" +
+  let html =
+    '<div class="head"><h1 class="title">Mon cahier</h1>' +
+    '<button class="lvlBtn" data-action="sheet" data-id="level" aria-label="Úroveň">' + state.level + " ▾</button>" +
+    '<button class="icoBtn" data-action="show-stats" aria-label="Statistiky">📊</button>' +
+    '<button class="icoBtn" data-action="show-help" aria-label="Nápověda">ℹ️</button>' +
+    '<button class="icoBtn" data-action="show-settings" aria-label="Nastavení">⚙️</button></div>' +
+    '<p class="ver">v' + APP_VERSION + "</p>";
+
+  const sec = [];
+  if (nDue > 0) sec.push('<button class="secondary" data-action="start" data-id="due">📅 Zopakovat <span class="n">' + nDue + "</span></button>");
+  if (nErr > 0) sec.push('<button class="secondary" data-action="start" data-id="errs">🔁 Chyby <span class="n">' + nErr + "</span></button>");
+  html += '<div class="card">' +
+    '<div class="streakLine">🔥 Série <b>' + si.streak + "</b> " + (si.streak === 1 ? "den" : si.streak >= 2 && si.streak <= 4 ? "dny" : "dní") +
+    " · dnes <b>" + si.today + "</b> / " + state.goal + "</div>" +
     '<div class="hm">' + Array.from({ length: 28 }, (_, i) => {
       const c = state.days[todayKey(27 - i)] || 0;
       return '<span class="hmd' + (c >= state.goal ? " g" : c > 0 ? " p" : "") + '"></span>';
-    }).join("") + "</div></div>";
-  html +=
-    '<button class="modeBtn" data-action="start" data-id="mix">🎲 Mix — všechno dohromady<small>časování, slovíčka, gramatika, čísla, rody' + (LVL[state.level] >= LVL.A2 ? ", věty" : "") + " v jednom kole</small></button>" +
-    (nDue > 0 ? '<button class="modeBtn" data-action="start" data-id="due">📅 K zopakování dnes (' + nDue + ')<small>co je podle rozvrhu opakování na řadě</small></button>' : "") +
-    (nErr > 0 ? '<button class="modeBtn" data-action="start" data-id="errs">🔁 Moje chyby<small>kolo jen z toho, co se nedávno nepovedlo</small></button>' : "") +
-    '<span class="label secLabel">Cvičení</span>' +
-    '<button class="modeBtn" data-action="start" data-id="conj">Časování<small>nous + prendre → nous prenons</small></button>' +
-    '<button class="modeBtn" data-action="start" data-id="gram">Gramatika<small>členy, předložky, zájmena, subjonctif… doplň do věty</small></button>' +
-    '<button class="modeBtn" data-action="start" data-id="art">Stažené členy<small>au, aux, du, des — à + le → au, de + les → des</small></button>' +
-    (LVL[state.level] >= LVL.A2 ? '<button class="modeBtn" data-action="start" data-id="pcaux">Passé composé: être × avoir<small>🏠 domeček i slovesa mimo něj — rozdíl vedle sebe</small></button>' : "") +
-    (LVL[state.level] >= LVL.A2 ? '<button class="modeBtn" data-action="start" data-id="sent">Passé composé × imparfait<small>doplň správný čas do věty</small></button>' : "") +
-    '<button class="modeBtn" data-action="start" data-id="frcz">Slovíčka: francouzsky → česky<small>mettre → dát, položit</small></button>' +
-    '<button class="modeBtn" data-action="start" data-id="czfr">Slovíčka: česky → francouzsky<small>slíbit → promettre</small></button>' +
-    '<button class="modeBtn" data-action="start" data-id="cete">Porozumění textu (DELF)<small>přečti text a odpověz na otázky · ' + TEXTS.filter((t) => lvlOk(t.level, "B1")).length + " textů</small></button>" +
-    '<button class="modeBtn" data-action="start" data-id="num">Čísla 0–100<small>42 → quarante-deux' + (TTS_OK ? " (se zvukem i poslech)" : "") + "</small></button>" +
-    '<button class="modeBtn" data-action="start" data-id="gen">Rody: un / une<small>… problème? un!</small></button>' +
-    (TTS_OK ? '<button class="modeBtn" data-action="start" data-id="dict">Diktát (dictée)<small>poslouchej větu a napiš ji</small></button>' : "") +
-    '<button class="modeBtn" data-action="start" data-id="swiss">🇨🇭 Švýcarská francouzština<small>natel, cornet, septante… a zrádné názvy jídel</small></button>' +
-    '<button class="modeBtn" data-action="show-stats">📊 Statistiky chyb<small>co jde nejhůř a co procvičit</small></button>' +
-    '<button class="modeBtn" data-action="show-help">ℹ️ Nápověda<small>co dělají režimy a nastavení</small></button>';
+    }).join("") + "</div>" +
+    '<div class="todayBtns">' +
+    '<button class="primary" data-action="start" data-id="mix">▶ Mix<small>časování, slovíčka, gramatika, čísla, rody' + (a2 ? ", věty" : "") + "</small></button>" +
+    sec.join("") + "</div></div>";
 
-  if (state.history.length > 0) {
-    html += '<div class="card"><div class="histHead"><span class="label">Historie</span>' +
-      '<button class="histClear" data-action="clear-history">smazat</button></div>';
-    for (const h of state.history.slice(0, 8)) {
-      const p = Math.round((100 * h.ok) / h.t);
-      const cls = p >= 80 ? " hi" : p < 50 ? " lo" : "";
-      html += '<div class="histRow"><span class="histDate">' + fmtDate(h.d) + "</span>" +
-        '<span class="histMode">' + MODE_LABEL[h.m] + (h.m === "conj" || h.m === "frcz" || h.m === "czfr" ? " · " + GRP_LABEL[h.g] : "") + "</span>" +
-        '<span class="histScore' + cls + '">' + h.ok + "/" + h.t + " · " + p + " %</span></div>";
-    }
-    html += "</div>";
-  }
+  const group = (label, tiles) => '<div class="group"><span class="label">' + label + '</span><div class="tiles">' + tiles + "</div></div>";
+  html += group("Slovesa",
+    tile("conj", "Časování", "nous prenons", true) +
+    (a2 ? tile("pcaux", "être × avoir", "🏠 domeček") + tile("sent", "PC × imparfait", "il pleuvait") : ""));
+  html += group("Gramatika",
+    tile("gram", "Gramatika", "au, du, dont…", true) +
+    tile("gen", "Rody", "un problème"));
+  html += group("Slovíčka",
+    tile("vocab", "Slovíčka", state.vocabDir === "czfr" ? "CZ → FR" : "FR → CZ", true) +
+    tile("num", "Čísla", numWord(72)) +
+    tile("swiss", "🇨🇭 Romandie", "natel, cornet"));
+  html += group("Poslech a čtení",
+    (TTS_OK ? tile("dict", "Diktát", "🔊 dictée") : "") +
+    tile("cete", "Čtení DELF", TEXTS.filter((t) => lvlOk(t.level, "B1")).length + " textů"));
+
+  if (state.sheet) html += '<div class="scrim" data-action="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"><div class="sheetIn">' + renderSheet() + "</div></div>";
   return html;
+}
+
+// témata gramatiky dostupná na aktuální úrovni: [[topic, počet], …] od nejpočetnějšího
+function gramTopicsAtLevel() {
+  const cnt = {};
+  GRAMMAR.forEach((g) => { if (lvlOk(g.lvl, "B1")) cnt[g.topic] = (cnt[g.topic] || 0) + 1; });
+  return Object.entries(cnt).sort((a, b) => b[1] - a[1]);
+}
+
+function renderSheet() {
+  const head = (title, sub) => '<div class="grab"></div><h2 class="sheetTitle">' + title + "</h2>" + (sub ? '<p class="sheetSub">' + sub + "</p>" : "");
+  const field = (label, body) => '<div class="field"><span class="label">' + label + "</span>" + body + "</div>";
+  const go = (mode) => '<button class="nextBtn" data-action="start" data-id="' + mode + '">Začít</button>';
+  if (state.sheet === "level") {
+    return head("Úroveň", "Filtruje obsah ve všech cvičeních a přednastaví časy.") +
+      chipRow(LEVELS.map((l) => ({ id: l, label: l })), (l) => state.level === l.id, "level");
+  }
+  if (state.sheet === "conj") {
+    return head("Časování", "nous + prendre → nous prenons") +
+      field("Slovesa (" + getPool().length + ")", chipRow(
+        [{ id: "all", label: "Všechna" }, { id: "irr", label: "Nepravidelná" }, { id: "reg", label: "Pravidelná" }],
+        (g) => state.grp === g.id, "grp")) +
+      field("Časy", chipRow(TENSES.filter((t) => LVL[t.lvl] <= LVL[state.level]), (t) => state.tenseIds.includes(t.id), "tense")) +
+      go("conj");
+  }
+  if (state.sheet === "vocab") {
+    return head("Slovíčka", "překlad oběma směry") +
+      field("Směr", chipRow([{ id: "frcz", label: "FR → CZ" }, { id: "czfr", label: "CZ → FR" }], (d) => state.vocabDir === d.id, "vocab-dir")) +
+      field("Zdroj", chipRow(
+        [{ id: "all", label: "Vše" }, { id: "verbs", label: "Jen slovesa" }, { id: "themes", label: "Jen témata" }],
+        (v) => state.vocabSrc === v.id, "vocab-src")) +
+      go(state.vocabDir);
+  }
+  if (state.sheet === "gram") {
+    const topics = gramTopicsAtLevel().map(([t, n]) => ({ id: t, label: t + " · " + n }));
+    return head("Gramatika", "doplň do věty") +
+      field("Témata", chipRow([{ id: "*", label: "Vše" }].concat(topics),
+        (t) => (t.id === "*" ? !state.gramTopics.length : state.gramTopics.includes(t.id)), "gram-topic")) +
+      go("gram");
+  }
+  return "";
+}
+
+function renderSettings() {
+  const row = (label, body) => '<div class="setRow"><span class="label">' + label + "</span>" + body + "</div>";
+  const onOff = (key, on) => chipRow([{ id: "1", label: on }, { id: "0", label: "vypnuto" }], (o) => String(+!!state[key]) === o.id, "set-" + key);
+  let html = '<div class="topbar"><button class="back" data-action="menu">← menu</button></div>' +
+    '<h1 class="title">Nastavení</h1><p class="subtitle">platí pro všechna cvičení</p>';
+  html += '<div class="card">' +
+    row("Denní cíl", chipRow([{ id: 10, label: "10" }, { id: 20, label: "20" }, { id: 50, label: "50" }], (g) => state.goal === g.id, "goal")) +
+    row("Otázek v kole", chipRow(LENGTHS, (l) => state.sessionLen === l.id, "len")) +
+    row("Odpovídání", chipRow([{ id: "choice", label: "výběr" }, { id: "text", label: "✍ psaní" }], (a) => state.ans === a.id, "ans")) +
+    row("Čísla 70–99", chipRow(
+      [{ id: "fr", label: "🇫🇷 soixante-dix" }, { id: "ch", label: "🇨🇭 septante" }],
+      (s) => state.numStyle === s.id, "num-style")) +
+    "</div>";
+  html += '<div class="card">' +
+    row("🧠 Chytré opakování", onOff("smart", "zapnuto")) +
+    (TTS_OK ? row("🔊 Zvuk", onOff("sound", "zapnuto") + (state.sound ? (() => {
+      const d = voiceDiag();
+      return d ? '<p class="voiceDiag' + (d.ok ? "" : " warn") + '">' + esc(d.msg) + "</p>" : "";
+    })() : "")) : "") +
+    "</div>";
+  html += '<div class="card"><span class="label">Záloha dat</span>' +
+    '<p class="statEmpty" style="margin-bottom:10px">Historie, statistiky i pokrok jsou jen v tomhle prohlížeči. Zálohou je přeneseš na jiné zařízení.</p>' +
+    '<button class="modeBtn" data-action="export-data" style="margin-bottom:8px">⬇ Stáhnout zálohu</button>' +
+    '<button class="modeBtn" data-action="import-data" style="margin-bottom:0">⬆ Obnovit ze zálohy</button>' +
+    '<input type="file" id="importFile" accept="application/json" style="display:none">' +
+    "</div>";
+  return html;
+}
+
+function renderHistory() {
+  if (!state.history.length) return "";
+  let html = '<div class="card"><div class="histHead"><span class="label">Historie kol</span>' +
+    '<button class="histClear" data-action="clear-history">smazat</button></div>';
+  for (const h of state.history.slice(0, 8)) {
+    const p = Math.round((100 * h.ok) / h.t);
+    const cls = p >= 80 ? " hi" : p < 50 ? " lo" : "";
+    html += '<div class="histRow"><span class="histDate">' + fmtDate(h.d) + "</span>" +
+      '<span class="histMode">' + (MODE_LABEL[h.m] || h.m) + (h.m === "conj" || h.m === "frcz" || h.m === "czfr" ? " · " + GRP_LABEL[h.g] : "") + "</span>" +
+      '<span class="histScore' + cls + '">' + h.ok + "/" + h.t + " · " + p + " %</span></div>";
+  }
+  return html + "</div>";
 }
 
 function renderQuiz() {
@@ -1590,6 +1684,7 @@ function statRows(entries, nameFn, max, delSpec) {
 function renderStats() {
   let html = '<div class="topbar"><button class="back" data-action="menu">← menu</button></div>';
   html += '<h1 class="title">Statistiky chyb</h1><p class="subtitle">počítá se všechno napříč sessions (jen v tomhle zařízení)</p>';
+  html += renderHistory();
 
   // slovesa: agregace c|inf|tense → per sloveso
   const byVerbTense = aggStats("c|");
@@ -1643,12 +1738,6 @@ function renderStats() {
         '<span class="statVal"><button class="knowBtn" data-action="unhide-item" data-id="' + esc(id) + '">↩ obnovit</button></span></div>'
       ).join("") + "</div>";
   }
-  html += '<div class="card"><span class="label">Záloha dat</span>' +
-    '<p class="statEmpty" style="margin-bottom:10px">Historie, statistiky i pokrok jsou jen v tomhle prohlížeči. Zálohou je přeneseš na jiné zařízení.</p>' +
-    '<button class="modeBtn" data-action="export-data" style="margin-bottom:8px">⬇ Stáhnout zálohu</button>' +
-    '<button class="modeBtn" data-action="import-data" style="margin-bottom:0">⬆ Obnovit ze zálohy</button>' +
-    '<input type="file" id="importFile" accept="application/json" style="display:none">' +
-    "</div>";
   html += '<button class="modeBtn" data-action="clear-stats">Smazat statistiky</button>';
   return html;
 }
@@ -1661,6 +1750,7 @@ function exportData() {
       level: state.level, tenseIds: state.tenseIds, grp: state.grp,
       sessionLen: state.sessionLen, ans: state.ans, smart: state.smart,
       sound: state.sound, goal: state.goal, vocabSrc: state.vocabSrc,
+      numStyle: state.numStyle, houseHl: state.houseHl, vocabDir: state.vocabDir, gramTopics: state.gramTopics,
     },
   };
   const blob = new Blob([JSON.stringify(payload, null, 1)], { type: "application/json" });
@@ -1701,32 +1791,34 @@ function renderHelp() {
     '<h1 class="title">Nápověda</h1>' +
     '<p class="subtitle">co dělají jednotlivé režimy a volby</p>' +
 
+    '<div class="card helpCard"><span class="label">Menu</span>' +
+    '<p>Nahoře je dnešek: série, mřížka posledních 28 dní a hlavní tlačítko <b>▶ Mix</b>; když je co opakovat, vedle se objeví <b>📅 Zopakovat</b> a <b>🔁 Chyby</b> s počtem. Pod tím jsou cvičení ve skupinách. Dlaždice s nápisem <b>volby ›</b> (Časování, Gramatika, Slovíčka) otevřou zespodu panel, kde si vybereš, co procvičovat, a tlačítkem Začít spustíš kolo; ostatní dlaždice začínají rovnou. Volby se pamatují. Vpravo nahoře je 📊 Statistiky (včetně historie kol), ℹ️ tahle nápověda a ⚙️ Nastavení.</p>' +
+    '</div>' +
+
     '<div class="card helpCard"><span class="label">Úroveň (A1–B2)</span>' +
-    '<p>Přepínač úrovně úplně nahoře řídí obsah celé appky: která slovesa a podstatná jména se losují, které časy jsou v nabídce (présent a futur proche od A1, passé composé a imparfait od A2, futur simple a conditionnel od B1, subjonctif od B2), které texty na čtení se nabízejí a jestli je dostupný režim vět PC × imparfait (od A2). Při změně úrovně se časy přednastaví — pak si je můžeš doladit ručně.</p>' +
+    '<p>Pilulka s úrovní vedle nadpisu (třeba <b>A2 ▾</b>) řídí obsah celé appky: která slovesa a podstatná jména se losují, které časy jsou v nabídce (présent a futur proche od A1, passé composé a imparfait od A2, futur simple a conditionnel od B1, subjonctif od B2), které texty na čtení se nabízejí a jestli je dostupný režim vět PC × imparfait (od A2). Při změně úrovně se časy přednastaví — pak si je můžeš doladit ručně.</p>' +
     '</div>' +
 
     '<div class="card helpCard"><span class="label">Režimy</span>' +
     '<p><b>🎲 Mix</b> — jedno kolo, ve kterém se střídají všechny typy cvičení tvé úrovně: časování, slovíčka, gramatika, čísla, rody a od A2 i věty PC × imparfait. Ideální jako každodenní rozcvička.</p>' +
     '<p><b>📅 K zopakování dnes</b> — appka plánuje opakování jako kartičky (Leitner): každá položka má krabičku 1–5; správná odpověď ji posune výš (opakuje se za 1 / 3 / 7 / 14 / 30 dní), chyba ji vrátí do krabičky 1. Tlačítko se objeví, jen když je dnes co opakovat, a ukáže počet.</p>' +
     '<p><b>🔁 Moje chyby</b> — rychlé kolo jen z položek, kde se v poslední době chybovalo.</p>' +
-    '<p><b>Gramatika</b> — doplňování do vět podle témat tvé úrovně: členy, předložky, zápor, zájmena (COD/COI, y/en), srovnávání, vztažná zájmena, podmínky, subjonctif… Po odpovědi krátké vysvětlení.</p>' +
-    '<p><b>Stažené členy (articles contractés)</b> — samostatné cvičení na splývání předložek <i>à</i> a <i>de</i> s určitým členem: <i>à + le → au</i>, <i>à + les → aux</i>, <i>de + le → du</i>, <i>de + les → des</i>. Před ženským rodem a samohláskou se nestahuje (<i>à la gare</i>, <i>à l\'école</i>, <i>de l\'eau</i>). Obsahuje i vazby se slovesy (<i>jouer au foot</i> × <i>jouer du piano</i>, <i>avoir mal aux dents</i>), země (<i>au Portugal</i>, <i>aux États-Unis</i>) a na B1 rozlišení, kdy je <i>du</i> stažení a kdy dělivý člen. Stejné položky chodí i v běžné Gramatice a v Mixu.</p>' +
+    '<p><b>Gramatika</b> — doplňování do vět podle témat tvé úrovně: členy, předložky, zápor, zájmena (COD/COI, y/en), srovnávání, vztažná zájmena, podmínky, subjonctif… Po odpovědi krátké vysvětlení. Ve volbách si vybereš jedno nebo víc témat (u každého je počet vět na tvé úrovni), nebo „Vše“. Výběr platí jen tady, v Mixu chodí všechna témata.</p>' +
+    '<p><b>Stažené členy (articles contractés)</b> — téma Gramatiky (ve volbách vyber jen „Stažené členy“) na splývání předložek <i>à</i> a <i>de</i> s určitým členem: <i>à + le → au</i>, <i>à + les → aux</i>, <i>de + le → du</i>, <i>de + les → des</i>. Před ženským rodem a samohláskou se nestahuje (<i>à la gare</i>, <i>à l\'école</i>, <i>de l\'eau</i>). Obsahuje i vazby se slovesy (<i>jouer au foot</i> × <i>jouer du piano</i>, <i>avoir mal aux dents</i>), země (<i>au Portugal</i>, <i>aux États-Unis</i>) a na B1 rozlišení, kdy je <i>du</i> stažení a kdy dělivý člen.</p>' +
     '<p><b>Diktát (dictée)</b> — přehraje se celá věta francouzsky (klidně opakovaně), ty ji napíšeš. Vyhodnocení po slovech: zeleně správně, oranžově jen chybějící akcent, červeně chyba.</p>' +
-    '<p><b>Časování</b> — sloveso, osoba a čas; vybereš (nebo napíšeš) správný tvar. Které časy se procvičují, si zvolíš v nastavení.</p>' +
+    '<p><b>Časování</b> — sloveso, osoba a čas; vybereš (nebo napíšeš) správný tvar. Ve volbách si vybereš časy a skupinu sloves (všechna / nepravidelná / pravidelná — platí i pro slovesa ve slovíčkách).</p>' +
     '<p><b>Passé composé: être × avoir</b> — doplňuješ celý tvar do věty a vybíráš ze čtyř možností, které se liší právě pomocným slovesem a shodou (<i>est allée</i> × <i>a allé</i> × <i>est allé</i>…). V jednom kole se střídají slovesa z „domečku“ (🏠 pohyb a změna stavu → <i>être</i> + shoda s podmětem: <i>elle est allée</i>, <i>ils sont venus</i>) se slovesy mimo domeček (→ <i>avoir</i>, příčestí se nemění: <i>j\'ai fait le ménage</i>), takže je ten rozdíl vidět vedle sebe. Po odpovědi se ukáže, do které skupiny sloveso patří.</p>' +
     '<p>V tomhle cvičení je pod možnostmi tlačítko <b>🏠 domeček slovesa être</b> — rozbalí přímo pod otázkou schéma se všemi slovesy, která jdou s <i>être</i>. U každé nové otázky je zase sbalené, ať je to nápověda, po které sáhneš, když ji potřebuješ. Uvnitř si přepneš, jestli se má sloveso z právě řešené otázky zvýraznit, nebo jestli chceš vidět jen čistý domeček bez napovídání — tahle volba se pamatuje.</p>' +
     '<p><b>Passé composé × imparfait</b> — věta s mezerou, vybíráš mezi dvěma tvary. Po odpovědi se ukáže, <i>proč</i> je správně zrovna tenhle čas (signální slova jako <i>tous les étés</i>, <i>soudain</i>, <i>d\'habitude</i>…).</p>' +
-    '<p><b>Slovíčka</b> — překlad oběma směry. V nastavení si vybereš zdroj: jen slovesa, jen tematická zásoba (jídlo, rodina, čas, barvy, cestování, počasí, oblečení, práce, pocity…), nebo obojí.</p>' +
+    '<p><b>Slovíčka</b> — překlad oběma směry. Ve volbách si vybereš směr (FR → CZ, nebo CZ → FR) a zdroj: jen slovesa, jen tematická zásoba (jídlo, rodina, čas, barvy, cestování, počasí, oblečení, práce, pocity…), nebo obojí.</p>' +
     '<p><b>Porozumění textu (DELF)</b> — krátký text (e-mail, inzerát, článek…) a otázky francouzsky, jako u zkoušky. Text zůstává během otázek nahoře. Nabízejí se texty do tvé úrovně včetně (na B2 tedy i A1–B1 — nižší úroveň textu neuškodí).</p>' +
     '<p><b>Čísla 0–100</b> — číslo vybereš/napíšeš francouzsky. Se zapnutým zvukem je půlka otázek poslechová: slyšíš číslo a píšeš číslice.</p>' +
     '<p><b>Rody: un / une</b> — tipuješ rod podstatného jména. Vybraná jsou hlavně zrádná slova (<i>le problème, le musée, l\'eau — f!, le bonheur…</i>).</p>' +
     '<p><b>🇨🇭 Švýcarská francouzština</b> — rozdíly mezi francouzskou a švýcarskou (romandskou) francouzštinou: slovíčka (<i>natel</i>, <i>cornet</i>, <i>panosse</i>, <i>bancomat</i>), úřední a školní pojmy (<i>votation</i>, <i>maturité</i>, <i>action</i> = sleva), výrazy (<i>ça joue</i>, <i>tout de bon</i>) a hlavně <b>zrádné názvy jídel</b>: švýcarský <i>déjeuner</i> je snídaně, <i>dîner</i> je oběd a <i>souper</i> večeře — o jedno posunuté oproti Francii. Otázky chodí oběma směry a u záludností je česká poznámka.</p>' +
     '</div>' +
 
-    '<div class="card helpCard"><span class="label">Nastavení</span>' +
-    '<p><b>Slovesa</b> — všechna / jen nepravidelná / jen pravidelná (platí pro časování i slovíčka).</p>' +
-    '<p><b>Časy</b> — zapni/vypni jednotlivé časy pro časování. Imparfait, futur simple, conditionnel a subjonctif si přidej, až na ně dojde v kurzu.</p>' +
-    '<p><b>Počet otázek</b> — délka jednoho kola; u ∞ cvičíš, dokud nedáš „← ukončit“. U čtení je kolo vždy jeden text s otázkami.</p>' +
+    '<div class="card helpCard"><span class="label">⚙️ Nastavení</span>' +
+    '<p><b>Otázek v kole</b> — délka jednoho kola; u ∞ cvičíš, dokud nedáš „← ukončit“. U čtení je kolo vždy jeden text s otázkami.</p>' +
     '<p><b>Čísla 70–99</b> — přepínač stylu: francouzsky (<i>soixante-dix, quatre-vingts, quatre-vingt-dix</i>) nebo švýcarsky (<i>septante, huitante, nonante</i>). Pozn.: <i>septante</i> a <i>nonante</i> se používají v celé Romandii včetně Ženevy, ale <i>huitante</i> jen ve Vaud, Valais a Fribourgu — v Ženevě se pro 80 říká <i>quatre-vingts</i>. Při psaní se proto uznají obě varianty.</p>' +
     '<p><b>Denní cíl a série 🔥</b> — kolik otázek denně chceš stihnout. Nahoře v menu vidíš dnešní počet, sérii dní se splněným cílem a mřížku posledních 28 dní (modrá = něco, zelená = cíl splněn).</p>' +
     '<p><b>✍ psaní odpovědí</b> — místo výběru ze 4 možností odpověď píšeš. Těžší, ale blíž zkoušce. Kontrola je tolerantní: chybějící háčky a čárky (<i>etais</i> místo <i>étais</i>) se počítají jako správně, jen s upozorněním „pozor na akcenty“; u čísel je jedno, jestli píšeš pomlčky, nebo mezery. U časování stačí napsat samotný tvar (<i>ai répondu</i>), ale uzná se i celý tvar se zájmenem (<i>j\'ai répondu</i>).</p>' +
@@ -1741,7 +1833,7 @@ function renderHelp() {
     '</div>' +
 
     '<div class="card helpCard"><span class="label">Soukromí a data</span>' +
-    '<p>Všechno (historie, statistiky, pokrok, nastavení) se ukládá jen v prohlížeči — nikam se nic neposílá, žádný účet. Data jsou tedy vázaná na konkrétní zařízení; ve Statistikách je ale tlačítko na stažení zálohy a její obnovení jinde (telefon ↔ počítač).</p>' +
+    '<p>Všechno (historie, statistiky, pokrok, nastavení) se ukládá jen v prohlížeči — nikam se nic neposílá, žádný účet. Data jsou tedy vázaná na konkrétní zařízení; v Nastavení je ale tlačítko na stažení zálohy a její obnovení jinde (telefon ↔ počítač).</p>' +
     '</div>';
 }
 
@@ -1750,6 +1842,7 @@ function render() {
   else if (state.screen === "quiz") app.innerHTML = renderQuiz();
   else if (state.screen === "stats") app.innerHTML = renderStats();
   else if (state.screen === "help") app.innerHTML = renderHelp();
+  else if (state.screen === "settings") app.innerHTML = renderSettings();
   else app.innerHTML = renderDone();
   const inp = document.getElementById("typeInput");
   if (inp) inp.focus();
@@ -1769,14 +1862,24 @@ app.addEventListener("click", (e) => {
   else if (action === "level") {
     state.level = id;
     state.tenseIds = tensePreset(id);
+    state.sheet = null;
+    saveSettings(); render();
+  }
+  else if (action === "sheet") { state.sheet = id; render(); }
+  else if (action === "close-sheet") { state.sheet = null; render(); }
+  else if (action === "vocab-dir") { state.vocabDir = id; saveSettings(); render(); }
+  else if (action === "gram-topic") {
+    if (id === "*") state.gramTopics = [];
+    else if (state.gramTopics.includes(id)) state.gramTopics = state.gramTopics.filter((t) => t !== id);
+    else state.gramTopics = [...state.gramTopics, id];
+    saveSettings(); render();
+  }
+  else if (action === "ans") { state.ans = id; saveSettings(); render(); }
+  else if (action === "set-smart" || action === "set-sound") {
+    state[action.slice(4)] = id === "1";
     saveSettings(); render();
   }
   else if (action === "read-text") speak(TEXTS[state.cteIdx].text);
-  else if (action === "toggle") {
-    if (id === "ans") state.ans = state.ans === "text" ? "choice" : "text";
-    else state[id] = !state[id];
-    saveSettings(); render();
-  }
   else if (action === "start") start(id);
   else if (action === "answer") answerChoice(state.q.options[Number(id)]);
   else if (action === "submit-typed") answerTyped(document.getElementById("typeInput").value);
@@ -1784,7 +1887,8 @@ app.addEventListener("click", (e) => {
   else if (action === "next") next();
   else if (action === "finish") finish();
   else if (action === "encore") start(state.mode);
-  else if (action === "menu") { state.screen = "menu"; render(); }
+  else if (action === "menu") { state.screen = "menu"; state.sheet = null; render(); }
+  else if (action === "show-settings") { state.screen = "settings"; render(); }
   else if (action === "show-stats") { state.screen = "stats"; render(); }
   else if (action === "show-help") { state.screen = "help"; render(); }
   else if (action === "toggle-house") { state.houseOpen = !state.houseOpen; render(); }
@@ -1828,7 +1932,8 @@ app.addEventListener("change", (e) => {
   }
 });
 
-app.addEventListener("keydown", (e) => {
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && state.sheet) { state.sheet = null; render(); return; }
   if (e.key === "Enter" && e.target.id === "typeInput") {
     answerTyped(e.target.value);
   }
