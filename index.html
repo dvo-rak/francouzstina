@@ -342,7 +342,7 @@
 <script>
 "use strict";
 
-const APP_VERSION = "27 (2026-10-02)";
+const APP_VERSION = "28 (2026-10-02)";
 
 // ── Skládání tvarů ──────────────────────────────────────────
 const PRONOUNS = ["je", "tu", "il", "nous", "vous", "ils"];
@@ -472,7 +472,7 @@ const MODE_LABEL = {
   mix: "Mix", conj: "Časování", frcz: "FR → ČJ", czfr: "ČJ → FR",
   sent: "PC × Imparfait", num: "Čísla", gen: "Rody", cete: "Čtení",
   gram: "Gramatika", dict: "Diktát", due: "Opakování", errs: "Moje chyby",
-  swiss: "Švýcarská fr.", pcaux: "PC: être × avoir", art: "Stažené členy",
+  swiss: "Švýcarská fr.", pcaux: "PC: être × avoir", art: "Stažené členy", time: "Hodiny",
 };
 const GRP_LABEL = { all: "všechna", irr: "nepravidelná", reg: "pravidelná" };
 const LENGTHS = [
@@ -645,6 +645,7 @@ const DEFAULT_SETTINGS = {
   houseHl: true, // zvýraznit v domečku sloveso z aktuální otázky
   vocabDir: "frcz", // frcz | czfr — směr dlaždice Slovíčka
   gramTopics: [], // vybraná témata Gramatiky; prázdné = vše
+  vocabThemes: [], // vybraná témata Slovíček (při zdroji „témata“); prázdné = vše
 };
 const state = {
   screen: "menu", // menu | quiz | done | stats | help | settings
@@ -681,6 +682,7 @@ function saveSettings() {
     sessionLen: state.sessionLen, ans: state.ans, smart: state.smart, sound: state.sound,
     goal: state.goal, vocabSrc: state.vocabSrc, numStyle: state.numStyle,
     houseHl: state.houseHl, vocabDir: state.vocabDir, gramTopics: state.gramTopics,
+    vocabThemes: state.vocabThemes,
   });
 }
 
@@ -693,14 +695,18 @@ function getPool() {
 const nounPool = () => NOUNS.filter((n) => lvlOk(n.lvl, "A2"));
 // režimy dostupné na dané úrovni (věty PC×imp až od A2, kde je PC)
 const mixModes = () => {
-  const m = ["conj", "conj", "conj", "frcz", "czfr", "num", "gen", "gen", "gram", "gram"];
+  const m = ["conj", "conj", "conj", "frcz", "czfr", "num", "time", "gen", "gen", "gram", "gram"];
   if (LVL[state.level] >= LVL.A2) m.push("sent", "sent", "pcaux", "pcaux");
   return m;
 };
 // slovíčka: slovesa / tematická zásoba / obojí, dle nastavení a úrovně
 function vocabItems() {
   const verbs = getPool().map((v) => ({ fr: v.inf, cz: v.cz, th: null }));
-  const themes = VOCAB.filter((v) => lvlOk(v.lvl, "A2")).map((v) => ({ fr: v.fr, cz: v.cz, th: v.th }));
+  let themes = VOCAB.filter((v) => lvlOk(v.lvl, "A2")).map((v) => ({ fr: v.fr, cz: v.cz, th: v.th }));
+  // výběr témat platí jen v samotných Slovíčkách (Mix bere vše); prázdný průnik → ignoruj
+  const vt = state.vocabSrc === "themes" && (state.mode === "frcz" || state.mode === "czfr") ? state.vocabThemes : [];
+  const sel = themes.filter((v) => vt.includes(v.th));
+  if (sel.length >= 4) themes = sel;
   return state.vocabSrc === "verbs" ? verbs : state.vocabSrc === "themes" ? themes : verbs.concat(themes);
 }
 
@@ -805,6 +811,135 @@ function buildNumListen(n) {
   if (state.ans === "text") { q.answerType = "text"; q.accepted = [String(n)]; q.inputMode = "numeric"; }
   else { q.answerType = "choice"; q.options = shuffle(numOptions(n).map(String)); }
   return q;
+}
+
+// ── Hodiny ──────────────────────────────────────────────────
+// Past pro Čechy: čeština počítá k DALŠÍ hodině (půl čtvrté = 15:30),
+// francouzština od PŘEDCHOZÍ (trois heures et demie). Distraktory na to cílí.
+const CZ_NA = ["dvanáct", "jednu", "dvě", "tři", "čtyři", "pět", "šest", "sedm", "osm", "devět", "deset", "jedenáct"];
+const CZ_GEN = ["dvanácté", "jedné", "druhé", "třetí", "čtvrté", "páté", "šesté", "sedmé", "osmé", "deváté", "desáté", "jedenácté"];
+const CZ_NOM = ["dvanáct", "jedna", "dvě", "tři", "čtyři", "pět", "šest", "sedm", "osm", "devět", "deset", "jedenáct"];
+const TIME_KIND_LABEL = {
+  "00": "celé hodiny", "15": "et quart (čtvrt na…)", "30": "et demie (půl…)",
+  "45": "moins le quart (tři čtvrtě na…)", po: "minuty po celé", pred: "moins … (minuty do celé)",
+};
+const TIME_TYPE_LABEL = { cz: "z češtiny", dig: "z digitálního času", fr: "z francouzštiny" };
+const timeKind = (m) => (m === 0 ? "00" : m === 15 ? "15" : m === 30 ? "30" : m === 45 ? "45" : m < 30 ? "po" : "pred");
+const fmtClock = (h, m) => h + ":" + pad2(m);
+
+function frClockHour(h) {
+  if (h === 0) return "minuit";
+  if (h === 12) return "midi";
+  const n = h % 12;
+  return n === 1 ? "une heure" : frNumber(n) + " heures";
+}
+const frDayPart = (h) => (h === 0 || h === 12 ? "" : h < 12 ? " du matin" : h < 18 ? " de l'après-midi" : " du soir");
+// hovorová francouzština (12h): trois heures et demie, quatre heures moins le quart…
+function frTimeEveryday(h, m, withPart) {
+  let H = h, s;
+  if (m === 0) s = frClockHour(h);
+  else if (m === 15) s = frClockHour(h) + " et quart";
+  else if (m === 30) s = frClockHour(h) + (h === 0 || h === 12 ? " et demi" : " et demie");
+  else if (m < 30) s = frClockHour(h) + " " + frNumber(m);
+  else {
+    H = (h + 1) % 24;
+    s = frClockHour(H) + (m === 45 ? " moins le quart" : " moins " + frNumber(60 - m));
+  }
+  return s + (withPart ? frDayPart(H) : "");
+}
+// úřední (24h): quinze heures trente
+function frTimeOfficial(h, m) {
+  const hh = h === 0 ? "zéro heure" : h === 1 ? "une heure" : frNumber(h).replace(/ un$/, " une") + " heures";
+  return hh + (m ? " " + frNumber(m) : "");
+}
+// česky hovorově, jen čtvrthodiny: půl čtvrté, čtvrt na čtyři, tři čtvrtě na čtyři
+function czTime(h, m) {
+  const nx = (h + 1) % 12;
+  if (m === 15) return "čtvrt na " + CZ_NA[nx];
+  if (m === 30) return "půl " + CZ_GEN[nx];
+  if (m === 45) return "tři čtvrtě na " + CZ_NA[nx];
+  if (h === 0) return "půlnoc";
+  if (h === 12) return "poledne";
+  const n = h % 12;
+  return CZ_NOM[n] + (n === 1 ? " hodina" : n >= 2 && n <= 4 ? " hodiny" : " hodin");
+}
+
+// distraktory: nejdřív „česká past“ (±1 h, stejné minuty), pak ostatní čtvrthodiny / sousední minuty
+function timeDistractors(h, m, fmt) {
+  const correct = fmt(h, m);
+  const add = (H, M) => [((H % 24) + 24) % 24, M];
+  const quarters = [0, 15, 30, 45].filter((x) => x !== m);
+  const near = [m + 5, m - 5, m + 10, m - 10].filter((x) => x > 0 && x < 60);
+  const prio = [add(h + 1, m), add(h - 1, m)];
+  const rest = shuffle([
+    ...(m % 15 === 0 ? quarters : near).map((x) => add(h, x)),
+    ...(m % 15 === 0 ? quarters : near).map((x) => add(h + 1, x)),
+    add(h + 2, m), add(h - 2, m),
+  ]);
+  const out = new Set();
+  for (const [H, M] of [...prio, ...rest]) {
+    const s = fmt(H, M);
+    if (s !== correct) out.add(s);
+    if (out.size >= 3) break;
+  }
+  return [...out];
+}
+
+// type: cz (česky hovorově → FR), dig (digitálně 15:30 → FR), fr (FR → 15:30)
+function buildTime(h, m, type) {
+  const statId = "h|" + timeKind(m) + "|" + type;
+  const key = "time|" + type + "|" + h + ":" + m;
+  if (type === "fr") {
+    const word = frTimeEveryday(h, m, true);
+    const listen = state.sound && TTS_OK && Math.random() < 0.4;
+    const q = {
+      key, statId,
+      prompt: listen ? "Poslouchej — kolik je hodin?" : "Kolik je hodin?",
+      big: listen ? "🔊" : word, bigClass: listen ? "" : "sentence",
+      sub: listen ? "klikni na 🔊 pro přehrání" : "",
+      correct: fmtClock(h, m),
+      audio: listen ? word : null,
+      sayAfter: !listen && state.sound ? word : null,
+    };
+    if (state.ans === "text") {
+      q.answerType = "text"; q.inputMode = "decimal"; q.sub = "napiš čas, např. 15:30";
+      q.accepted = [fmtClock(h, m), h + "h" + pad2(m), h + "." + pad2(m), h + " " + pad2(m), h + "h" + (m ? pad2(m) : "")];
+    } else {
+      q.answerType = "choice";
+      q.options = shuffle([q.correct, ...timeDistractors(h, m, fmtClock)]);
+    }
+    return q;
+  }
+  const official = type === "dig" && Math.random() < 0.3;
+  const fmt = type === "cz" ? (H, M) => frTimeEveryday(H, M, false) : official ? frTimeOfficial : (H, M) => frTimeEveryday(H, M, true);
+  const correct = fmt(h, m);
+  const q = {
+    key, statId,
+    prompt: type === "cz" ? "Česky se řekne… a francouzsky?" : official ? "Úředně (nádraží, rádio):" : "Jak se to řekne francouzsky?",
+    big: type === "cz" ? czTime(h, m) : fmtClock(h, m),
+    bigClass: type === "cz" ? "sentence" : "",
+    sub: type === "cz" ? "= " + fmtClock(h % 12 || 12, m) : "",
+    correct,
+    sayAfter: state.sound ? correct : null,
+  };
+  if (state.ans === "text") {
+    q.answerType = "text";
+    q.accepted = [correct, frTimeEveryday(h, m, false), frTimeEveryday(h, m, true), frTimeOfficial(h, m),
+      ...(type === "cz" ? [frTimeOfficial((h + 12) % 24, m), frTimeEveryday((h + 12) % 24, m, true)] : [])];
+  } else {
+    q.answerType = "choice";
+    q.options = shuffle([correct, ...timeDistractors(h, m, fmt)]);
+  }
+  return q;
+}
+
+// náhodný čas daného druhu; cz jen pro čtvrthodiny (jinak se česky hovorově neříká)
+function randTime(kind, type) {
+  const k = kind || (Math.random() < 0.75 ? pick(["00", "15", "30", "30", "45", "45"]) : pick(["po", "pred"]));
+  const m = k === "po" ? pick([5, 10, 20, 25]) : k === "pred" ? pick([35, 40, 50, 55]) : Number(k);
+  const t = type || (m % 15 === 0 ? pick(["cz", "cz", "dig", "fr"]) : pick(["dig", "fr"]));
+  const h = t === "cz" ? 1 + rnd(12) : rnd(24);
+  return { h, m, type: t === "cz" && m % 15 ? "dig" : t };
 }
 
 // shoda příčestí s podmětem (jen u être): ms / fs / mp / fp
@@ -1054,6 +1189,11 @@ function questionFromStatId(id) {
     const n = Math.min(100, dec + rnd(10));
     return buildNum(n);
   }
+  if (p[0] === "h") {
+    if (!TIME_KIND_LABEL[p[1]] || !TIME_TYPE_LABEL[p[2]]) return null;
+    const t = randTime(p[1], p[2]);
+    return buildTime(t.h, t.m, t.type);
+  }
   if (p[0] === "g") {
     const noun = NOUNS.find((x) => x.n === p[1]);
     return noun ? buildGen(noun) : null;
@@ -1166,6 +1306,14 @@ function makeQuestion() {
       const cands = Array.from({ length: K }, () => pick(idxs));
       const si = sampleWeighted(cands, (i) => "sw|" + i);
       const q = buildSwiss(si);
+      if (q.key === prevKey) continue;
+      return q;
+    }
+
+    if (mode === "time") {
+      const cands = Array.from({ length: K }, () => randTime());
+      const t = sampleWeighted(cands, (x) => "h|" + timeKind(x.m) + "|" + x.type);
+      const q = buildTime(t.h, t.m, t.type);
       if (q.key === prevKey) continue;
       return q;
     }
@@ -1420,6 +1568,7 @@ function renderMenu() {
   html += group("Slovíčka",
     tile("vocab", "Slovíčka", state.vocabDir === "czfr" ? "CZ → FR" : "FR → CZ", true) +
     tile("num", "Čísla", numWord(72)) +
+    tile("time", "🕐 Hodiny", "půl čtvrté = 3:30") +
     tile("swiss", "🇨🇭 Romandie", "natel, cornet"));
   html += group("Poslech a čtení",
     (TTS_OK ? tile("dict", "Diktát", "🔊 dictée") : "") +
@@ -1427,6 +1576,12 @@ function renderMenu() {
 
   if (state.sheet) html += '<div class="scrim" data-action="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"><div class="sheetIn">' + renderSheet() + "</div></div>";
   return html;
+}
+
+function vocabThemesAtLevel() {
+  const cnt = {};
+  VOCAB.forEach((v) => { if (lvlOk(v.lvl, "A2")) cnt[v.th] = (cnt[v.th] || 0) + 1; });
+  return Object.entries(cnt).sort((a, b) => a[0].localeCompare(b[0], "cs"));
 }
 
 // témata gramatiky dostupná na aktuální úrovni: [[topic, počet], …] od nejpočetnějšího
@@ -1458,6 +1613,8 @@ function renderSheet() {
       field("Zdroj", chipRow(
         [{ id: "all", label: "Vše" }, { id: "verbs", label: "Jen slovesa" }, { id: "themes", label: "Jen témata" }],
         (v) => state.vocabSrc === v.id, "vocab-src")) +
+      (state.vocabSrc === "themes" ? field("Témata", chipRow([{ id: "*", label: "Všechna" }].concat(vocabThemesAtLevel().map(([t, n]) => ({ id: t, label: t + " · " + n }))),
+        (t) => (t.id === "*" ? !state.vocabThemes.length : state.vocabThemes.includes(t.id)), "vocab-theme")) : "") +
       go(state.vocabDir);
   }
   if (state.sheet === "gram") {
@@ -1703,6 +1860,11 @@ function renderStats() {
     statRows(Object.entries(aggStats("v|")), (k) => esc(k), 8, (k) => "v|" + k) + "</div>";
   html += '<div class="card"><span class="label">Čísla (podle desítek)</span>' +
     statRows(Object.entries(aggStats("n|")), (k) => esc(k) + "–" + (Number(k) + 9 > 100 ? 100 : Number(k) + 9), 5, (k) => "n|" + k) + "</div>";
+  html += '<div class="card"><span class="label">Hodiny</span>' +
+    statRows(Object.entries(aggStats("h|")), (k) => {
+      const [kd, ty] = k.split("|");
+      return esc((TIME_KIND_LABEL[kd] || kd) + " · " + (TIME_TYPE_LABEL[ty] || ty));
+    }, 6, (k) => "h|" + k) + "</div>";
   html += '<div class="card"><span class="label">Rody</span>' +
     statRows(Object.entries(aggStats("g|")), (k) => esc(k), 8, (k) => "g|" + k) + "</div>";
   html += '<div class="card"><span class="label">PC × imparfait (věty)</span>' +
@@ -1751,6 +1913,7 @@ function exportData() {
       sessionLen: state.sessionLen, ans: state.ans, smart: state.smart,
       sound: state.sound, goal: state.goal, vocabSrc: state.vocabSrc,
       numStyle: state.numStyle, houseHl: state.houseHl, vocabDir: state.vocabDir, gramTopics: state.gramTopics,
+      vocabThemes: state.vocabThemes,
     },
   };
   const blob = new Blob([JSON.stringify(payload, null, 1)], { type: "application/json" });
@@ -1810,9 +1973,10 @@ function renderHelp() {
     '<p><b>Passé composé: être × avoir</b> — doplňuješ celý tvar do věty a vybíráš ze čtyř možností, které se liší právě pomocným slovesem a shodou (<i>est allée</i> × <i>a allé</i> × <i>est allé</i>…). V jednom kole se střídají slovesa z „domečku“ (🏠 pohyb a změna stavu → <i>être</i> + shoda s podmětem: <i>elle est allée</i>, <i>ils sont venus</i>) se slovesy mimo domeček (→ <i>avoir</i>, příčestí se nemění: <i>j\'ai fait le ménage</i>), takže je ten rozdíl vidět vedle sebe. Po odpovědi se ukáže, do které skupiny sloveso patří.</p>' +
     '<p>V tomhle cvičení je pod možnostmi tlačítko <b>🏠 domeček slovesa être</b> — rozbalí přímo pod otázkou schéma se všemi slovesy, která jdou s <i>être</i>. U každé nové otázky je zase sbalené, ať je to nápověda, po které sáhneš, když ji potřebuješ. Uvnitř si přepneš, jestli se má sloveso z právě řešené otázky zvýraznit, nebo jestli chceš vidět jen čistý domeček bez napovídání — tahle volba se pamatuje.</p>' +
     '<p><b>Passé composé × imparfait</b> — věta s mezerou, vybíráš mezi dvěma tvary. Po odpovědi se ukáže, <i>proč</i> je správně zrovna tenhle čas (signální slova jako <i>tous les étés</i>, <i>soudain</i>, <i>d\'habitude</i>…).</p>' +
-    '<p><b>Slovíčka</b> — překlad oběma směry. Ve volbách si vybereš směr (FR → CZ, nebo CZ → FR) a zdroj: jen slovesa, jen tematická zásoba (jídlo, rodina, čas, barvy, cestování, počasí, oblečení, práce, pocity…), nebo obojí.</p>' +
+    '<p><b>Slovíčka</b> — překlad oběma směry. Ve volbách si vybereš směr (FR → CZ, nebo CZ → FR) a zdroj: jen slovesa, jen tematická zásoba (jídlo, rodina, čas, barvy, cestování, počasí, oblečení, práce, pocity…), nebo obojí. Při „Jen témata“ si můžeš vybrat konkrétní témata, třeba jen počasí (<i>il fait beau, il y a du vent, il pleut…</i>); výběr platí jen tady, Mix bere všechno.</p>' +
     '<p><b>Porozumění textu (DELF)</b> — krátký text (e-mail, inzerát, článek…) a otázky francouzsky, jako u zkoušky. Text zůstává během otázek nahoře. Nabízejí se texty do tvé úrovně včetně (na B2 tedy i A1–B1 — nižší úroveň textu neuškodí).</p>' +
     '<p><b>Čísla 0–100</b> — číslo vybereš/napíšeš francouzsky. Se zapnutým zvukem je půlka otázek poslechová: slyšíš číslo a píšeš číslice.</p>' +
+    '<p><b>🕐 Hodiny</b> — kolik je hodin francouzsky. Pozor na hlavní past: čeština počítá k <i>další</i> hodině, francouzština od <i>předchozí</i>. <b>Půl čtvrté</b> (15:30) je <i>trois heures et demie</i>, ne <i>quatre</i>! Podobně <b>čtvrt na čtyři</b> = <i>trois heures et quart</i> (3:15) a <b>tři čtvrtě na čtyři</b> = <i>quatre heures moins le quart</i> (3:45 — tady je zase čtyřka, „čtyři bez čtvrt“). Minuty po celé se přidávají (<i>trois heures dix</i>), po půl se odečítají od další hodiny (<i>quatre heures moins dix</i> = 3:50). Ve 12 je <i>midi</i>, ve 24 <i>minuit</i> (a <i>midi et demi</i> bez e). Ráno/odpoledne/večer se rozliší <i>du matin / de l\'après-midi / du soir</i>; úředně (nádraží, rádio) se říká 24h: <i>quinze heures trente</i>. Otázky chodí trojím způsobem: česky hovorově → francouzsky, z digitálního času (15:30) → francouzsky a francouzsky (i poslechem) → digitální čas. Při psaní času stačí 15:30 nebo 15h30.</p>' +
     '<p><b>Rody: un / une</b> — tipuješ rod podstatného jména. Vybraná jsou hlavně zrádná slova (<i>le problème, le musée, l\'eau — f!, le bonheur…</i>).</p>' +
     '<p><b>🇨🇭 Švýcarská francouzština</b> — rozdíly mezi francouzskou a švýcarskou (romandskou) francouzštinou: slovíčka (<i>natel</i>, <i>cornet</i>, <i>panosse</i>, <i>bancomat</i>), úřední a školní pojmy (<i>votation</i>, <i>maturité</i>, <i>action</i> = sleva), výrazy (<i>ça joue</i>, <i>tout de bon</i>) a hlavně <b>zrádné názvy jídel</b>: švýcarský <i>déjeuner</i> je snídaně, <i>dîner</i> je oběd a <i>souper</i> večeře — o jedno posunuté oproti Francii. Otázky chodí oběma směry a u záludností je česká poznámka.</p>' +
     '</div>' +
@@ -1872,6 +2036,12 @@ app.addEventListener("click", (e) => {
     if (id === "*") state.gramTopics = [];
     else if (state.gramTopics.includes(id)) state.gramTopics = state.gramTopics.filter((t) => t !== id);
     else state.gramTopics = [...state.gramTopics, id];
+    saveSettings(); render();
+  }
+  else if (action === "vocab-theme") {
+    if (id === "*") state.vocabThemes = [];
+    else if (state.vocabThemes.includes(id)) state.vocabThemes = state.vocabThemes.filter((t) => t !== id);
+    else state.vocabThemes = [...state.vocabThemes, id];
     saveSettings(); render();
   }
   else if (action === "ans") { state.ans = id; saveSettings(); render(); }

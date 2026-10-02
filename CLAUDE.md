@@ -67,7 +67,10 @@ vaty. Chyby přiznej rovnou. Cílové uživatelce appky se říká „QA".
     jen varují).
   - `VOCAB` — tematická slovíčka: `{fr, cz, lvl, th (téma česky)}`; `fr` unikátní
     napříč VOCAB (statId je `v|fr`, sdílený se slovesy). Distraktory se berou
-    přednostně ze stejného tématu.
+    přednostně ze stejného tématu. Fráze jsou v pořádku (`il fait beau`,
+    `Quelle heure est-il ?`). Sheet Slovíček při zdroji „Jen témata“ nabízí
+    chipy témat → `state.vocabThemes` (ukládá se, platí jen v režimech
+    frcz/czfr, Mix bere vše; když výběr dá < 4 položky, ignoruje se).
   - `PCAUX` — passé composé être×avoir ve větě: `{s (věta s ___), inf, p (0–5),
     g ("ms"|"fs"|"mp"|"fp" = rod/číslo podmětu pro shodu), avoirCOD?, why?}`.
     Tvar i distraktory generuje `buildPcaux()` z `VERBS` (aux + pp + `agree()`).
@@ -108,6 +111,20 @@ vaty. Chyby přiznej rovnou. Cílové uživatelce appky se říká „QA".
 `state.numStyle` ("fr"|"ch") vybírá přes `numWord()`; při psaní
 `numAccepted()` uznává obě formy (kvůli ženevskému quatre-vingts).
 
+## Hodiny (index.html, režim `time`)
+
+Generované, žádná data. Česká past: čeština počítá k DALŠÍ hodině (půl čtvrté
+= 15:30), francouzština od předchozí (trois heures et demie). `frTimeEveryday`
+(12h, et quart / et demie / moins le quart / moins dix, midi/minuit, „midi et
+demi“ bez e, volitelně du matin / de l'après-midi / du soir podle hodiny, ke
+které se tvar vztahuje), `frTimeOfficial` (24h, quinze heures trente),
+`czTime` (jen čtvrthodiny, hovorově). Typy otázek: `cz` (česky → FR, bez části
+dne, protože obojí je 12h), `dig` (digitálně 15:30 → FR, 30 % úředně), `fr`
+(FR / poslech → digitální čas). Uživatelka chce výhradně DIGITÁLNÍ čas, žádný
+ručičkový ciferník. `timeDistractors` dává přednost ±1 h se stejnými minutami
+(to je ta past). statId `h|<kind>|<type>`, kind ∈ 00/15/30/45/po/pred;
+`questionFromStatId` z něj losuje nový konkrétní čas.
+
 ## Elize u „je“ (index.html)
 
 V psacím režimu vrací `typePrefix(tense, i, bare)` objekt
@@ -126,7 +143,7 @@ možnost.
   intervaly `BOX_DAYS = [_,1,3,7,14,30]` dní. Správně → box+1, chyba → box 1.
 - Režimy `due` (📅 K zopakování) a `errs` (🔁 Moje chyby) jedou z fronty
   `state.queue` statId; otázky staví `questionFromStatId()` — pozor, musí
-  umět všechny prefixy (c|, v|, n|, g|, s|, gr|, d|); `t|` (čtení) se do
+  umět všechny prefixy (c|, v|, n|, g|, s|, gr|, d|, pa|, sw|, h|); `t|` (čtení) se do
   front nefiltruje. Nerozložitelná id (smazaná data) se tiše přeskakují.
 - Denní počítadlo v `fr-cahier-days` (klíč YYYY-MM-DD, prořezává se >120 dní);
   streak = po sobě jdoucí dny se splněným `goal` (dnešek se počítá až po
