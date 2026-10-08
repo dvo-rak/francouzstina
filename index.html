@@ -343,6 +343,8 @@
   .prLive { color: #8391ad; font-style: italic; min-height: 1.4em; margin: 10px 0 0; }
   .prErr { color: #b8302f; font-size: 0.9rem; margin: 10px 0 0; }
   .prAudio { width: 100%; margin-top: 8px; }
+  .prRetry { display: block; width: 100%; margin-top: 16px; text-align: center; padding: 13px; }
+  .prTries { color: #8391ad; font-size: 0.85rem; margin: 6px 0 0; }
 
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; }
@@ -356,7 +358,7 @@
 <script>
 "use strict";
 
-const APP_VERSION = "34 (2026-10-08)";
+const APP_VERSION = "35 (2026-10-08)";
 
 // ── Skládání tvarů ──────────────────────────────────────────
 const PRONOUNS = ["je", "tu", "il", "nous", "vous", "ils"];
@@ -1563,9 +1565,41 @@ function pronReset() {
   state.pr = null;
 }
 
+// opakované pokusy: statistiky/SRS počítají jen PRVNÍ pokus (ať opakování ví,
+// co dělá potíže); oprava napodruhé se ale započítá do skóre kola jako správně
+const prCarry = () => {
+  const o = state.pr || {};
+  return { tries: o.tries || 0, everOk: !!o.everOk };
+};
+function pronAnswer(ok, shown) {
+  const p = state.pr;
+  if (!p.tries) {
+    p.everOk = ok;
+    applyAnswer(ok, shown);
+    return;
+  }
+  state.picked = shown;
+  if (ok && !p.everOk) {
+    p.everOk = true;
+    state.score.ok += 1;
+    state.stamp = "Tentokrát ano !";
+  } else {
+    state.stamp = ok ? pick(PRAISE) : pick(OOPS);
+  }
+  render();
+}
+function pronRetry() {
+  const o = state.pr || {};
+  if (o.recUrl) URL.revokeObjectURL(o.recUrl);
+  state.pr = { phase: "idle", tries: (o.tries || 0) + 1, everOk: !!o.everOk };
+  state.picked = null;
+  state.dictMarks = null;
+  render();
+}
+
 function pronStart() {
   const q = state.q;
-  const p = (state.pr = { phase: "listening", live: "" });
+  const p = (state.pr = { phase: "listening", live: "", ...prCarry() });
   render();
   const rec = new SR_CLASS();
   rec.lang = "fr-FR";
@@ -1601,7 +1635,7 @@ function pronStart() {
     const r = pronEval(last, q.correct);
     state.dictMarks = r.marks;
     Object.assign(p, { phase: "done", heard: last, score: r.score, ok: r.ok });
-    applyAnswer(r.ok, last);
+    pronAnswer(r.ok, last);
   }
   prRec = { stop };
   rec.onresult = (e) => {
@@ -1629,7 +1663,7 @@ function pronStart() {
 // bez rozpoznávání: jen nahrát, poslechnout a ohodnotit se sama
 function pronRecStart() {
   const q = state.q;
-  const p = (state.pr = { phase: "recording" });
+  const p = (state.pr = { phase: "recording", ...prCarry() });
   render();
   prRecordStart((url) => {
     if (state.q !== q || state.pr !== p) return URL.revokeObjectURL(url);
@@ -1657,6 +1691,7 @@ function renderPronControls() {
   if (useSR) {
     h += '<p class="prLive" id="prLive">' + esc(p.phase === "listening" ? p.live || "poslouchám… až dočteš, klepni na hotovo" : "") + "</p>";
   }
+  if (p.tries) h += '<p class="prTries">' + (p.tries + 1) + ". pokus" + (p.everOk ? " · už se ti to povedlo, klidně si to zopakuj" : " · do statistik se počítá jen první, tady jde o to, aby to sedělo") + "</p>";
   if (p.err) h += '<p class="prErr">' + esc(p.err) + "</p>";
   if (!useSR && p.recUrl) {
     h += '<audio controls class="prAudio" src="' + p.recUrl + '"></audio>' +
@@ -2043,6 +2078,7 @@ function renderQuiz() {
       : state.mode === "due" || state.mode === "errs"
         ? state.qi >= state.queue.length - 1
         : state.sessionLen > 0 && s.total >= state.sessionLen;
+    if (q.pron) html += '<button class="secondary prRetry" data-action="pron-retry">🔁 zkusit znovu</button>';
     html += '<button class="nextBtn" data-action="next">' + (last ? "Výsledek →" : "Další →") + "</button>";
   }
   html += "</div>";
@@ -2229,7 +2265,7 @@ function renderHelp() {
     '<p>V tomhle cvičení je pod možnostmi tlačítko <b>🏠 domeček slovesa être</b> — rozbalí přímo pod otázkou schéma se všemi slovesy, která jdou s <i>être</i>. U každé nové otázky je zase sbalené, ať je to nápověda, po které sáhneš, když ji potřebuješ. Uvnitř si přepneš, jestli se má sloveso z právě řešené otázky zvýraznit, nebo jestli chceš vidět jen čistý domeček bez napovídání — tahle volba se pamatuje.</p>' +
     '<p><b>Passé composé × imparfait</b> — věta s mezerou, vybíráš mezi dvěma tvary. Po odpovědi se ukáže, <i>proč</i> je správně zrovna tenhle čas (signální slova jako <i>tous les étés</i>, <i>soudain</i>, <i>d\'habitude</i>…).</p>' +
     '<p><b>Slovíčka</b> — překlad oběma směry. Ve volbách si vybereš směr (FR → CZ, nebo CZ → FR) a zdroj: jen slovesa, jen tematická zásoba (jídlo, rodina, čas, barvy, cestování, počasí, oblečení, práce, pocity…), nebo obojí. Při „Jen témata“ si můžeš vybrat konkrétní témata, třeba jen počasí (<i>il fait beau, il y a du vent, il pleut…</i>); výběr platí jen tady, Mix bere všechno.</p>' +
-    '<p><b>🎤 Výslovnost</b> — přečti větu nahlas. Nejdřív si můžeš pustit 🔊 vzor, pak klepni na 🎤 číst a mluv; až dočteš, klepni na ⏹ hotovo (nebo chvíli počkej, ukončí se to samo). Telefon tvou řeč přepíše a appka obarví slova: zelená = zaznělo správně, červená = slyšel něco jiného. Za správně se počítá, jen když sedí všechna slova — věty jsou schválně postavené na zrádných dvojicích (<i>vu × vous</i>, <i>sur × sous</i>, <i>poisson × poison</i>, <i>ils‿ont × ils sont</i>) a pod větou je napsané, na co si dát pozor. Zároveň se nahráváš, takže si pak můžeš pustit vzor a sebe po sobě. Slova, která znějí stejně a liší se jen pravopisem (<i>a/à</i>, <i>parle/parlent</i>), se za chybu nepočítají. Je to kontrola <i>srozumitelnosti</i> (rozuměl by ti Francouz?), ne fonetická analýza každé hlásky. Když rozpoznávání nefunguje nebo ho v Nastavení vypneš, zůstane jen nahrávání: nahraješ se, poslechneš a sama ohodnotíš.</p>' +
+    '<p><b>🎤 Výslovnost</b> — přečti větu nahlas. Nejdřív si můžeš pustit 🔊 vzor, pak klepni na 🎤 číst a mluv; až dočteš, klepni na ⏹ hotovo (nebo chvíli počkej, ukončí se to samo). Telefon tvou řeč přepíše a appka obarví slova: zelená = zaznělo správně, červená = slyšel něco jiného. Za správně se počítá, jen když sedí všechna slova — věty jsou schválně postavené na zrádných dvojicích (<i>vu × vous</i>, <i>sur × sous</i>, <i>poisson × poison</i>, <i>ils‿ont × ils sont</i>) a pod větou je napsané, na co si dát pozor. Zároveň se nahráváš, takže si pak můžeš pustit vzor a sebe po sobě. Tlačítkem <b>🔁 zkusit znovu</b> čteš tu samou větu, kolikrát chceš; když to napodruhé sedí, počítá se to v kole jako správně (do statistik a plánu opakování jde jen první pokus, ať appka ví, co ti dělá potíže). Slova, která znějí stejně a liší se jen pravopisem (<i>a/à</i>, <i>parle/parlent</i>), se za chybu nepočítají. Je to kontrola <i>srozumitelnosti</i> (rozuměl by ti Francouz?), ne fonetická analýza každé hlásky. Když rozpoznávání nefunguje nebo ho v Nastavení vypneš, zůstane jen nahrávání: nahraješ se, poslechneš a sama ohodnotíš.</p>' +
     '<p><b>Porozumění textu (DELF)</b> — krátký text (e-mail, inzerát, článek…) a otázky francouzsky, jako u zkoušky. Text zůstává během otázek nahoře. Nabízejí se texty do tvé úrovně včetně (na B2 tedy i A1–B1 — nižší úroveň textu neuškodí).</p>' +
     '<p><b>Čísla 0–100</b> — číslo vybereš/napíšeš francouzsky. Se zapnutým zvukem je půlka otázek poslechová: slyšíš číslo a píšeš číslice.</p>' +
     '<p><b>🕐 Hodiny</b> — kolik je hodin francouzsky. Pozor na hlavní past: čeština počítá k <i>další</i> hodině, francouzština od <i>předchozí</i>. <b>Půl čtvrté</b> (15:30) je <i>trois heures et demie</i>, ne <i>quatre</i>! Podobně <b>čtvrt na čtyři</b> = <i>trois heures et quart</i> (3:15) a <b>tři čtvrtě na čtyři</b> = <i>quatre heures moins le quart</i> (3:45 — tady je zase čtyřka, „čtyři bez čtvrt“). Minuty po celé se přidávají (<i>trois heures dix</i>), po půl se odečítají od další hodiny (<i>quatre heures moins dix</i> = 3:50). Ve 12 je <i>midi</i>, ve 24 <i>minuit</i> (a <i>midi et demi</i> bez e). Ráno/odpoledne/večer se rozliší <i>du matin / de l\'après-midi / du soir</i>; úředně (nádraží, rádio) se říká 24h: <i>quinze heures trente</i>. Otázky chodí trojím způsobem: česky hovorově → francouzsky, z digitálního času (15:30) → francouzsky a francouzsky (i poslechem) → digitální čas. Při psaní času stačí 15:30 nebo 15h30.</p>' +
@@ -2319,8 +2355,9 @@ app.addEventListener("click", (e) => {
     if (state.picked !== null || !state.pr) return;
     state.pr.self = true;
     state.pr.ok = id === "ok";
-    applyAnswer(state.pr.ok, id === "ok" ? "✓" : "✗");
+    pronAnswer(state.pr.ok, id === "ok" ? "✓" : "✗");
   }
+  else if (action === "pron-retry") pronRetry();
   else if (action === "next") next();
   else if (action === "finish") finish();
   else if (action === "encore") start(state.mode);

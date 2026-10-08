@@ -149,6 +149,10 @@ v paměti), `pronReset()` při každé nové otázce / konci / menu zastaví
 rozpoznávání i nahrávání a uvolní blob. `pr|` je vyloučené z front due/errs
 (mikrofon uprostřed jiného cvičení by obtěžoval) a režim není v Mixu.
 Nápověda poctivě říká, že zvuk zpracovává výrobce prohlížeče.
+Opakované pokusy (🔁 zkusit znovu, `pronRetry`): `recStat` jen u PRVNÍHO
+pokusu (`pronAnswer` → `applyAnswer`), další pokusy jen přepisují razítko;
+první úspěch po chybě přičte `score.ok` (jednou, `everOk`). `prCarry()`
+přenáší `tries`/`everOk` do nového `state.pr` při startu poslechu.
 
 ## Přehrání odpovědi (index.html)
 
