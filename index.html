@@ -337,6 +337,13 @@
   .field { margin-top: 14px; }
   .setRow + .setRow { margin-top: 16px; }
 
+  .prRow { display: flex; gap: 10px; margin-top: 14px; }
+  .prRow > button { flex: 1; text-align: center; }
+  .primary.prRec { background: #b8302f; }
+  .prLive { color: #8391ad; font-style: italic; min-height: 1.4em; margin: 10px 0 0; }
+  .prErr { color: #b8302f; font-size: 0.9rem; margin: 10px 0 0; }
+  .prAudio { width: 100%; margin-top: 8px; }
+
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; }
   }
@@ -349,7 +356,7 @@
 <script>
 "use strict";
 
-const APP_VERSION = "33 (2026-10-08)";
+const APP_VERSION = "34 (2026-10-08)";
 
 // ── Skládání tvarů ──────────────────────────────────────────
 const PRONOUNS = ["je", "tu", "il", "nous", "vous", "ils"];
@@ -480,6 +487,7 @@ const MODE_LABEL = {
   sent: "PC × Imparfait", num: "Čísla", gen: "Rody", cete: "Čtení",
   gram: "Gramatika", dict: "Diktát", due: "Opakování", errs: "Moje chyby",
   swiss: "Švýcarská fr.", pcaux: "PC: être × avoir", art: "Stažené členy", time: "Hodiny",
+  pron: "Výslovnost",
 };
 const GRP_LABEL = { all: "všechna", irr: "nepravidelná", reg: "pravidelná" };
 const LENGTHS = [
@@ -612,11 +620,11 @@ function idxPool(arr, prefix, extraFilter) {
 // položky k opakování / chybové (čtení t| se do front nehodí — je to celá session)
 const dueIds = () =>
   Object.entries(state.stats)
-    .filter(([id, s]) => s.due && s.due <= Date.now() && !id.startsWith("t|") && !isHidden(id))
+    .filter(([id, s]) => s.due && s.due <= Date.now() && !/^(t|pr)\|/.test(id) && !isHidden(id))
     .map(([id]) => id);
 const errIds = () =>
   Object.entries(state.stats)
-    .filter(([id, s]) => s.b > 0 && !id.startsWith("t|") && !isHidden(id))
+    .filter(([id, s]) => s.b > 0 && !/^(t|pr)\|/.test(id) && !isHidden(id))
     .sort((a, b) => b[1].b / (b[1].o + b[1].b) - a[1].b / (a[1].o + a[1].b))
     .slice(0, 20)
     .map(([id]) => id);
@@ -653,6 +661,7 @@ const DEFAULT_SETTINGS = {
   vocabDir: "frcz", // frcz | czfr — směr dlaždice Slovíčka
   gramTopics: [], // vybraná témata Gramatiky; prázdné = vše
   vocabThemes: [], // vybraná témata Slovíček (při zdroji „témata“); prázdné = vše
+  speechRec: true, // 🎤 rozpoznávání řeči ve Výslovnosti (vypnuto = jen nahrávání + sebehodnocení)
 };
 const state = {
   screen: "menu", // menu | quiz | done | stats | help | settings
@@ -689,7 +698,7 @@ function saveSettings() {
     sessionLen: state.sessionLen, ans: state.ans, smart: state.smart, sound: state.sound,
     goal: state.goal, vocabSrc: state.vocabSrc, numStyle: state.numStyle,
     houseHl: state.houseHl, vocabDir: state.vocabDir, gramTopics: state.gramTopics,
-    vocabThemes: state.vocabThemes,
+    vocabThemes: state.vocabThemes, speechRec: state.speechRec,
   });
 }
 
@@ -1171,6 +1180,18 @@ function buildGram(gi) {
   };
 }
 
+function buildPron(pi) {
+  const it = PRON[pi];
+  return {
+    key: "pr|" + pi, statId: "pr|" + pi,
+    prompt: "Přečti nahlas",
+    big: it.s, bigClass: "sentence",
+    sub: it.f ? "pozor: " + it.f : "",
+    correct: it.s, say: it.s,
+    answerType: "speak", pron: true,
+  };
+}
+
 function buildDict(di) {
   const d = DICT[di];
   return {
@@ -1330,6 +1351,15 @@ function makeQuestion() {
       return q;
     }
 
+    if (mode === "pron") {
+      const idxs = idxPool(PRON, "pr|", (i) => lvlOk(PRON[i].lvl, "B1"));
+      const cands = Array.from({ length: K }, () => pick(idxs));
+      const pi = sampleWeighted(cands, (i) => "pr|" + i);
+      const q = buildPron(pi);
+      if (q.key === prevKey) continue;
+      return q;
+    }
+
     if (mode === "time") {
       const cands = Array.from({ length: K }, () => randTime());
       const t = sampleWeighted(cands, (x) => "h|" + timeKind(x.m) + "|" + x.type);
@@ -1419,6 +1449,7 @@ function start(mode) {
   state.picked = null;
   state.accentWarn = false;
   state.houseOpen = false;
+  pronReset();
   state.screen = "quiz";
   render();
   if (state.q && state.q.audio) speak(state.q.audio);
@@ -1466,6 +1497,195 @@ function dictEval(input, target) {
   }
   return { marks, ok, accentWarn };
 }
+
+// ── Výslovnost (🎤): rozpoznávání řeči + souběžná nahrávka ───────────
+// Web Speech API (iOS Safari: webkitSpeechRecognition). Safari často skončí
+// BEZ isFinal → vyhodnocuje se poslední průběžný přepis. continuous + vlastní
+// stop po 2,5 s ticha / 20 s / tlačítkem; pojistka, kdyby nepřišlo onend.
+// Zvuk zpracovává výrobce prohlížeče (Apple/Google) — viz Nápověda.
+const SR_CLASS = window.SpeechRecognition || window.webkitSpeechRecognition;
+const SR_OK = !!SR_CLASS;
+const REC_OK = "MediaRecorder" in window && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+let prRec = null;   // běžící rozpoznávání: { stop }
+let prMedia = null; // běžící nahrávání: { m, st }
+
+// slova, která znějí stejně a liší se jen pravopisem (rozpoznávač si vybírá sám)
+const PR_HOMO = { "à": "a", "où": "ou", "est": "et", "ces": "ses", "ce": "se", "sont": "son", "verre": "ver", "vert": "ver", "vers": "ver" };
+function prKey(w) {
+  let k = PR_HOMO[w] || w;
+  k = stripAcc(k);
+  if (k.length > 5 && /ent$/.test(k)) k = k.slice(0, -2); // parlent → parle
+  return k.replace(/[sxtd]+$/, "") || k;                // parles/parlez… → parle
+}
+// rozpoznávač občas píše číslice: 8 → huit
+const prTok = (s) => dictTok(s).flatMap((w) => (/^\d+$/.test(w) && Number(w) <= 100 ? dictTok(frNumber(Number(w))) : [w]));
+// LCS po slovech: značka 2 = slovo zaznělo, 0 = chybí / jiné
+function pronEval(heard, target) {
+  const a = dictTok(target).map(prKey), b = prTok(heard).map(prKey);
+  const L = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--)
+    L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  const marks = [];
+  let i = 0, j = 0;
+  while (i < a.length) {
+    if (j < b.length && a[i] === b[j]) { marks.push(2); i++; j++; }
+    else if (j < b.length && L[i][j + 1] > L[i + 1][j]) j++;
+    else { marks.push(0); i++; }
+  }
+  const hit = marks.filter((m) => m === 2).length;
+  return { marks, score: a.length ? hit / a.length : 0, ok: hit === a.length };
+}
+
+function prRecordStart(onUrl) {
+  if (!REC_OK) return;
+  navigator.mediaDevices.getUserMedia({ audio: true }).then((st) => {
+    const ch = [];
+    const m = new MediaRecorder(st);
+    prMedia = { m, st };
+    m.ondataavailable = (e) => e.data.size && ch.push(e.data);
+    m.onstop = () => {
+      st.getTracks().forEach((t) => t.stop());
+      const blob = new Blob(ch, { type: m.mimeType || "audio/mp4" });
+      if (blob.size > 1000) onUrl(URL.createObjectURL(blob));
+    };
+    m.start();
+  }).catch(() => {});
+}
+function prRecordStop() {
+  if (prMedia && prMedia.m.state === "recording") prMedia.m.stop();
+  prMedia = null;
+}
+// při odchodu z otázky (další / konec / menu) všechno zastav
+function pronReset() {
+  if (prRec) prRec.stop();
+  prRecordStop();
+  if (state.pr && state.pr.recUrl) URL.revokeObjectURL(state.pr.recUrl);
+  state.pr = null;
+}
+
+function pronStart() {
+  const q = state.q;
+  const p = (state.pr = { phase: "listening", live: "" });
+  render();
+  const rec = new SR_CLASS();
+  rec.lang = "fr-FR";
+  rec.interimResults = true;
+  rec.continuous = true;
+  let last = "", ended = false, silence = null;
+  const hard = setTimeout(() => stop(), 20000);
+  const joinResults = (res) => {
+    const t = Array.from(res).map((x) => x[0].transcript.trim()).filter(Boolean);
+    const n = (x) => dictTok(x).join(" ");
+    const cumulative = t.length > 1 && t.every((x, k) => k === 0 || n(x).startsWith(n(t[k - 1])));
+    return cumulative ? t[t.length - 1] : t.join(" ");
+  };
+  function stop() {
+    if (ended) return;
+    clearTimeout(silence); clearTimeout(hard);
+    try { rec.stop(); } catch {}
+    setTimeout(finish, 1500); // Safari občas onend nepošle
+  }
+  function finish() {
+    if (ended) return;
+    ended = true;
+    clearTimeout(silence); clearTimeout(hard);
+    prRec = null;
+    prRecordStop();
+    if (state.q !== q || state.pr !== p) return; // mezitím odešla jinam
+    if (!last) {
+      p.phase = "idle";
+      p.err = p.err || "Nic jsem nezachytil, zkus to znovu (mluv kousek blíž k telefonu).";
+      render();
+      return;
+    }
+    const r = pronEval(last, q.correct);
+    state.dictMarks = r.marks;
+    Object.assign(p, { phase: "done", heard: last, score: r.score, ok: r.ok });
+    applyAnswer(r.ok, last);
+  }
+  prRec = { stop };
+  rec.onresult = (e) => {
+    last = joinResults(e.results);
+    p.live = last;
+    const el = document.getElementById("prLive");
+    if (el) el.textContent = last;
+    clearTimeout(silence);
+    silence = setTimeout(stop, 2500);
+  };
+  rec.onerror = (e) => {
+    if (e.error === "not-allowed" || e.error === "service-not-allowed")
+      p.err = "Mikrofon nebo rozpoznávání řeči není povolené. Na iPhonu: povol mikrofon pro Safari a zapni Diktování (Nastavení → Obecné → Klávesnice). Případně vypni 🎤 rozpoznávání v Nastavení — pak se jen nahráváš a posoudíš to sama.";
+    else if (e.error !== "no-speech" && e.error !== "aborted") p.err = "Chyba rozpoznávání: " + e.error;
+  };
+  rec.onend = finish;
+  try { rec.start(); } catch { p.phase = "idle"; p.err = "Rozpoznávání se nepodařilo spustit."; render(); return; }
+  prRecordStart((url) => {
+    if (state.pr !== p) return URL.revokeObjectURL(url);
+    p.recUrl = url;
+    if (state.picked !== null) render();
+  });
+}
+
+// bez rozpoznávání: jen nahrát, poslechnout a ohodnotit se sama
+function pronRecStart() {
+  const q = state.q;
+  const p = (state.pr = { phase: "recording" });
+  render();
+  prRecordStart((url) => {
+    if (state.q !== q || state.pr !== p) return URL.revokeObjectURL(url);
+    p.recUrl = url;
+    p.phase = "recorded";
+    render();
+  });
+}
+
+function renderPronControls() {
+  const p = state.pr || {};
+  const useSR = SR_OK && state.speechRec;
+  let h = '<div class="prRow">' +
+    (TTS_OK ? '<button class="secondary" data-action="say-answer">🔊 vzor</button>' : "");
+  if (useSR) {
+    h += p.phase === "listening"
+      ? '<button class="primary prRec" data-action="pron-stop">⏹ hotovo</button>'
+      : '<button class="primary" data-action="pron-start">🎤 číst</button>';
+  } else if (REC_OK) {
+    h += p.phase === "recording"
+      ? '<button class="primary prRec" data-action="pron-rec-stop">⏹ zastavit</button>'
+      : '<button class="primary" data-action="pron-rec">' + (p.recUrl ? "⏺ znovu" : "⏺ nahrát") + "</button>";
+  }
+  h += "</div>";
+  if (useSR) {
+    h += '<p class="prLive" id="prLive">' + esc(p.phase === "listening" ? p.live || "poslouchám… až dočteš, klepni na hotovo" : "") + "</p>";
+  }
+  if (p.err) h += '<p class="prErr">' + esc(p.err) + "</p>";
+  if (!useSR && p.recUrl) {
+    h += '<audio controls class="prAudio" src="' + p.recUrl + '"></audio>' +
+      '<p class="qSub" style="margin-top:10px">Pusť si vzor a svou nahrávku. Znělo to stejně?</p>' +
+      '<div class="prRow"><button class="secondary" data-action="pron-self" data-id="ko">✗ ještě ne</button>' +
+      '<button class="primary" data-action="pron-self" data-id="ok">✓ znělo to dobře</button></div>';
+  }
+  return h;
+}
+
+function renderPronResult(q) {
+  const p = state.pr || {};
+  let h = "";
+  if (p.self) {
+    h += '<div class="typedAnswer">' + esc(q.correct) + "</div>";
+  } else {
+    const toks = dictTok(q.correct);
+    let ti = 0;
+    h += '<div class="typedAnswer dictDiff">' + q.correct.split(/\s+/).map((w) => {
+      const hasTok = dictTok(w).length > 0;
+      let ok = true;
+      for (let k = 0; k < dictTok(w).length; k++) ok = ok && (state.dictMarks || [])[ti++] === 2;
+      return '<span class="dw ' + (!hasTok || ok ? "good" : "bad") + '">' + esc(w) + "</span>";
+    }).join(" ") + "</div>";
+    h += '<div class="dictYours">slyšel jsem: „' + esc(p.heard || "") + "“ · " + Math.round((p.score || 0) * 100) + " % slov</div>";
+  }
+  if (p.recUrl) h += '<span class="label" style="display:block;margin-top:12px">Tvoje nahrávka</span><audio controls class="prAudio" src="' + p.recUrl + '"></audio>';
+  return h;
+}
 function answerTyped(text) {
   if (state.picked !== null || !text.trim()) return;
   if (state.q.dict) {
@@ -1488,6 +1708,7 @@ function next() {
     state.picked = null;
     state.accentWarn = false;
     state.houseOpen = false;
+  pronReset();
     if (!state.q) { finish(); return; }
     render();
     if (state.q.audio) speak(state.q.audio);
@@ -1507,11 +1728,13 @@ function next() {
   state.picked = null;
   state.accentWarn = false;
   state.houseOpen = false;
+  pronReset();
   render();
   if (state.q && state.q.audio) speak(state.q.audio);
 }
 
 function finish() {
+  pronReset();
   if (state.score.total > 0) {
     const entry = {
       d: Date.now(), m: state.mode, g: state.grp,
@@ -1593,6 +1816,7 @@ function renderMenu() {
     tile("swiss", "🇨🇭 Romandie", "natel, cornet"));
   html += group("Poslech a čtení",
     (TTS_OK ? tile("dict", "Diktát", "🔊 dictée") : "") +
+    (SR_OK || REC_OK ? tile("pron", "🎤 Výslovnost", "sous × sur") : "") +
     tile("cete", "Čtení DELF", TEXTS.filter((t) => lvlOk(t.level, "B1")).length + " textů"));
 
   if (state.sheet) html += '<div class="scrim" data-action="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"><div class="sheetIn">' + renderSheet() + "</div></div>";
@@ -1667,6 +1891,7 @@ function renderSettings() {
       const d = voiceDiag();
       return d ? '<p class="voiceDiag' + (d.ok ? "" : " warn") + '">' + esc(d.msg) + "</p>" : "";
     })() : "")) : "") +
+    (SR_OK ? row("🎤 Rozpoznávání řeči (Výslovnost)", onOff("speechRec", "zapnuto")) : "") +
     "</div>";
   html += '<div class="card"><span class="label">Záloha dat</span>' +
     '<p class="statEmpty" style="margin-bottom:10px">Historie, statistiky i pokrok jsou jen v tomhle prohlížeči. Zálohou je přeneseš na jiné zařízení.</p>' +
@@ -1740,6 +1965,8 @@ function renderQuiz() {
       html += '<button class="' + cls + '" data-action="answer" data-id="' + idx + '"' +
         (state.picked !== null ? " disabled" : "") + ">" + esc(opt) + "</button>";
     });
+  } else if (q.pron) {
+    html += state.picked === null ? renderPronControls() : renderPronResult(q);
   } else if (state.picked === null) {
     html += '<div class="typeRow">' +
       (q.prefix ? '<span class="typePrefix' + (q.prefixElided ? " elided" : "") + '">' + esc(q.prefix) + "</span>" : "") +
@@ -1794,7 +2021,9 @@ function renderQuiz() {
   if (state.picked !== null) {
     const ok = q.answerType === "choice"
       ? state.picked === q.correct
-      : q.dict
+      : q.pron
+        ? !!(state.pr && state.pr.ok)
+        : q.dict
         ? dictEval(state.picked, q.correct).ok
         : matchTyped(state.picked, q.accepted) > 0;
     html += '<div class="stampRow"><div class="stamp ' + (ok ? "ok" : "ko") + '">' + esc(state.stamp) + "</div>" +
@@ -1802,11 +2031,11 @@ function renderQuiz() {
       "</div>";
     if (state.accentWarn) {
       html += '<p class="accentNote">Pozor na akcenty' + (q.dict ? "" : ": " + esc(q.correct)) + "</p>";
-    } else if (!ok && !q.dict) {
+    } else if (!ok && !q.dict && !q.pron) {
       html += '<p class="correction">→ ' + esc(q.correct) + "</p>";
     }
     if (q.why) html += '<p class="why">' + esc(q.why) + "</p>";
-    if (/^(s|gr|d|sw|pa)\|/.test(q.statId || "")) {
+    if (/^(s|gr|d|sw|pa|pr)\|/.test(q.statId || "")) {
       html += '<button class="hideLink" data-action="hide-item" data-id="' + esc(q.statId) + '">🚫 tuhle položku už nedávat</button>';
     }
     const last = state.mode === "cete"
@@ -1900,6 +2129,8 @@ function renderStats() {
     statRows(Object.entries(aggStats("gr|")), (k) => esc((GRAMMAR[Number(k)] || {}).s || "položka " + k), 8, (k) => "gr|" + k) + "</div>";
   html += '<div class="card"><span class="label">Diktáty</span>' +
     statRows(Object.entries(aggStats("d|")), (k) => esc((DICT[Number(k)] || {}).s || "věta " + k), 5, (k) => "d|" + k) + "</div>";
+  html += '<div class="card"><span class="label">Výslovnost</span>' +
+    statRows(Object.entries(aggStats("pr|")), (k) => esc((PRON[Number(k)] || {}).s || "věta " + k), 5, (k) => "pr|" + k) + "</div>";
   html += '<div class="card"><span class="label">Čtení (podle textu)</span>' +
     statRows(Object.entries(aggStats("t|")), (k) => esc((TEXTS[Number(k)] || {}).title || "text " + k), 5, (k) => "t|" + k) + "</div>";
 
@@ -1914,6 +2145,7 @@ function renderStats() {
       if (p[0] === "d") return (DICT[i] || {}).s || id;
       if (p[0] === "sw") return (SWISS[i] || {}).ch || id;
       if (p[0] === "pa") return (PCAUX[i] || {}).s || id;
+      if (p[0] === "pr") return (PRON[i] || {}).s || id;
       return id;
     };
     html += '<div class="card"><div class="histHead"><span class="label">Vyřazené položky (' + state.hidden.length + ')</span>' +
@@ -1936,7 +2168,7 @@ function exportData() {
       sessionLen: state.sessionLen, ans: state.ans, smart: state.smart,
       sound: state.sound, goal: state.goal, vocabSrc: state.vocabSrc,
       numStyle: state.numStyle, houseHl: state.houseHl, vocabDir: state.vocabDir, gramTopics: state.gramTopics,
-      vocabThemes: state.vocabThemes,
+      vocabThemes: state.vocabThemes, speechRec: state.speechRec,
     },
   };
   const blob = new Blob([JSON.stringify(payload, null, 1)], { type: "application/json" });
@@ -1997,6 +2229,7 @@ function renderHelp() {
     '<p>V tomhle cvičení je pod možnostmi tlačítko <b>🏠 domeček slovesa être</b> — rozbalí přímo pod otázkou schéma se všemi slovesy, která jdou s <i>être</i>. U každé nové otázky je zase sbalené, ať je to nápověda, po které sáhneš, když ji potřebuješ. Uvnitř si přepneš, jestli se má sloveso z právě řešené otázky zvýraznit, nebo jestli chceš vidět jen čistý domeček bez napovídání — tahle volba se pamatuje.</p>' +
     '<p><b>Passé composé × imparfait</b> — věta s mezerou, vybíráš mezi dvěma tvary. Po odpovědi se ukáže, <i>proč</i> je správně zrovna tenhle čas (signální slova jako <i>tous les étés</i>, <i>soudain</i>, <i>d\'habitude</i>…).</p>' +
     '<p><b>Slovíčka</b> — překlad oběma směry. Ve volbách si vybereš směr (FR → CZ, nebo CZ → FR) a zdroj: jen slovesa, jen tematická zásoba (jídlo, rodina, čas, barvy, cestování, počasí, oblečení, práce, pocity…), nebo obojí. Při „Jen témata“ si můžeš vybrat konkrétní témata, třeba jen počasí (<i>il fait beau, il y a du vent, il pleut…</i>); výběr platí jen tady, Mix bere všechno.</p>' +
+    '<p><b>🎤 Výslovnost</b> — přečti větu nahlas. Nejdřív si můžeš pustit 🔊 vzor, pak klepni na 🎤 číst a mluv; až dočteš, klepni na ⏹ hotovo (nebo chvíli počkej, ukončí se to samo). Telefon tvou řeč přepíše a appka obarví slova: zelená = zaznělo správně, červená = slyšel něco jiného. Za správně se počítá, jen když sedí všechna slova — věty jsou schválně postavené na zrádných dvojicích (<i>vu × vous</i>, <i>sur × sous</i>, <i>poisson × poison</i>, <i>ils‿ont × ils sont</i>) a pod větou je napsané, na co si dát pozor. Zároveň se nahráváš, takže si pak můžeš pustit vzor a sebe po sobě. Slova, která znějí stejně a liší se jen pravopisem (<i>a/à</i>, <i>parle/parlent</i>), se za chybu nepočítají. Je to kontrola <i>srozumitelnosti</i> (rozuměl by ti Francouz?), ne fonetická analýza každé hlásky. Když rozpoznávání nefunguje nebo ho v Nastavení vypneš, zůstane jen nahrávání: nahraješ se, poslechneš a sama ohodnotíš.</p>' +
     '<p><b>Porozumění textu (DELF)</b> — krátký text (e-mail, inzerát, článek…) a otázky francouzsky, jako u zkoušky. Text zůstává během otázek nahoře. Nabízejí se texty do tvé úrovně včetně (na B2 tedy i A1–B1 — nižší úroveň textu neuškodí).</p>' +
     '<p><b>Čísla 0–100</b> — číslo vybereš/napíšeš francouzsky. Se zapnutým zvukem je půlka otázek poslechová: slyšíš číslo a píšeš číslice.</p>' +
     '<p><b>🕐 Hodiny</b> — kolik je hodin francouzsky. Pozor na hlavní past: čeština počítá k <i>další</i> hodině, francouzština od <i>předchozí</i>. <b>Půl čtvrté</b> (15:30) je <i>trois heures et demie</i>, ne <i>quatre</i>! Podobně <b>čtvrt na čtyři</b> = <i>trois heures et quart</i> (3:15) a <b>tři čtvrtě na čtyři</b> = <i>quatre heures moins le quart</i> (3:45 — tady je zase čtyřka, „čtyři bez čtvrt“). Minuty po celé se přidávají (<i>trois heures dix</i>), po půl se odečítají od další hodiny (<i>quatre heures moins dix</i> = 3:50). Ve 12 je <i>midi</i>, ve 24 <i>minuit</i> (a <i>midi et demi</i> bez e). Ráno/odpoledne/večer se rozliší <i>du matin / de l\'après-midi / du soir</i>; úředně (nádraží, rádio) se říká 24h: <i>quinze heures trente</i>. Otázky chodí trojím způsobem: česky hovorově → francouzsky, z digitálního času (15:30) → francouzsky a francouzsky (i poslechem) → digitální čas. Při psaní času stačí 15:30 nebo 15h30.</p>' +
@@ -2020,7 +2253,7 @@ function renderHelp() {
     '</div>' +
 
     '<div class="card helpCard"><span class="label">Soukromí a data</span>' +
-    '<p>Všechno (historie, statistiky, pokrok, nastavení) se ukládá jen v prohlížeči — nikam se nic neposílá, žádný účet. Data jsou tedy vázaná na konkrétní zařízení; v Nastavení je ale tlačítko na stažení zálohy a její obnovení jinde (telefon ↔ počítač).</p>' +
+    '<p>Všechno (historie, statistiky, pokrok, nastavení) se ukládá jen v prohlížeči — appka sama nikam nic neposílá, žádný účet. Jediná výjimka je rozpoznávání řeči ve 🎤 Výslovnosti: přepis řeči dělá prohlížeč a zvuk přitom zpracovává jeho výrobce (Apple u Safari, Google u Chromu). Tvoje nahrávka zůstává jen v telefonu a po přechodu na další větu se zahodí. Rozpoznávání jde v Nastavení vypnout. Data jsou tedy vázaná na konkrétní zařízení; v Nastavení je ale tlačítko na stažení zálohy a její obnovení jinde (telefon ↔ počítač).</p>' +
     '</div>';
 }
 
@@ -2068,7 +2301,7 @@ app.addEventListener("click", (e) => {
     saveSettings(); render();
   }
   else if (action === "ans") { state.ans = id; saveSettings(); render(); }
-  else if (action === "set-smart" || action === "set-sound") {
+  else if (action === "set-smart" || action === "set-sound" || action === "set-speechRec") {
     state[action.slice(4)] = id === "1";
     saveSettings(); render();
   }
@@ -2078,10 +2311,20 @@ app.addEventListener("click", (e) => {
   else if (action === "submit-typed") answerTyped(document.getElementById("typeInput").value);
   else if (action === "replay") speak(state.q.audio);
   else if (action === "say-answer") speak(state.q.say);
+  else if (action === "pron-start") pronStart();
+  else if (action === "pron-stop") { if (prRec) prRec.stop(); }
+  else if (action === "pron-rec") pronRecStart();
+  else if (action === "pron-rec-stop") prRecordStop();
+  else if (action === "pron-self") {
+    if (state.picked !== null || !state.pr) return;
+    state.pr.self = true;
+    state.pr.ok = id === "ok";
+    applyAnswer(state.pr.ok, id === "ok" ? "✓" : "✗");
+  }
   else if (action === "next") next();
   else if (action === "finish") finish();
   else if (action === "encore") start(state.mode);
-  else if (action === "menu") { state.screen = "menu"; state.sheet = null; render(); }
+  else if (action === "menu") { pronReset(); state.screen = "menu"; state.sheet = null; render(); }
   else if (action === "show-settings") { state.screen = "settings"; render(); }
   else if (action === "show-stats") { state.screen = "stats"; render(); }
   else if (action === "show-help") { state.screen = "help"; render(); }

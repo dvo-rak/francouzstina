@@ -96,16 +96,15 @@ vaty. Chyby přiznej rovnou. Cílové uživatelce appky se říká „QA".
   - `SENTENCES` — věty PC×imparfait: `{s (s ___), inf, p (0–5), t: "imp"|"pc", why}`.
     POZOR: obě varianty (imp i pc tvar) musí gramaticky pasovat do mezery —
     žádné „je ___", kde by tvar začínal samohláskou (elize j').
+  - `PRON` — věty na výslovnost (režim `pron`): `{lvl, s, f (česky, na co
+    si dát pozor)}`, statId `pr|i`, APPEND-ONLY. Věty krátké, postavené na
+    minimálních párech (vu×vous, sur×sous, ils‿ont×ils sont…). BEZ číslic
+    a bez septante/nonante (rozpoznávač by napsal číslici → `prTok` umí jen
+    číslice→`frNumber`, tedy francouzskou formu).
   - `TEXTS` — DELF čtení: `{title, level: "B1"|"B2", text, qs: [{q, o[], c, why?}]}`.
     `c` musí být PŘESNÝ řetězec z `o`. Vrai/Faux vždy v pořadí ["Vrai","Faux"]
     (appka je nemíchá). Otázky francouzsky, `why` česky u chytáků.
 - `deploy.sh` — nasazení s verzováním (viz Workflow).
-- `mic-test.html` — DOČASNÁ testovací stránka (mimo menu, bez data.js):
-  ověřuje Web Speech API (`webkitSpeechRecognition`, fr-FR) a MediaRecorder
-  na zařízení QA (iPhone Safari, Mac Chrome) před stavbou režimu
-  🎤 Výslovnost. Po rozhodnutí smazat. Pozn.: rozpoznávání posílá zvuk
-  výrobci prohlížeče — pokud se režim postaví, upravit v Nápovědě větu
-  „nikam se nic neposílá“.
 - `README.md` — jen úvod + sekce pro správce. Uživatelská nápověda žije
   VÝHRADNĚ v appce (`renderHelp()` v index.html) — README ji záměrně
   neduplikuje, aby nebylo co zapomenout synchronizovat.
@@ -130,6 +129,26 @@ dne, protože obojí je 12h), `dig` (digitálně 15:30 → FR, 30 % úředně), 
 ručičkový ciferník. `timeDistractors` dává přednost ±1 h se stejnými minutami
 (to je ta past). statId `h|<kind>|<type>`, kind ∈ 00/15/30/45/po/pred;
 `questionFromStatId` z něj losuje nový konkrétní čas.
+
+## Výslovnost (index.html, režim `pron`)
+
+Web Speech API (`webkitSpeechRecognition`, fr-FR) + souběžně MediaRecorder
+(vlastní nahrávka k poslechu). Ověřeno na iPhonu QA (iOS 26, Safari/WebKit):
+obojí najednou funguje, chyby (sur místo sous) chytá. iOS ZÁLUDNOSTI, kvůli
+kterým je kód takový, jaký je: Safari často skončí BEZ `isFinal` → vyhodnocuje
+se poslední průběžný přepis; `continuous` + vlastní stop (2,5 s ticha / 20 s /
+tlačítko „hotovo“); pojistný timeout, když nepřijde `onend`; iOS někdy posílá
+kumulativní výsledky → `joinResults` bere poslední. `rec.start()` musí běžet
+synchronně v click handleru (user gesture), nahrávání se startuje až po něm.
+Hodnocení `pronEval`: LCS po slovech, správně = VŠECHNA slova (u minimálních
+párů by tolerance schovala právě tu chybu). `prKey` toleruje homofony lišící
+se jen pravopisem (a/à, parle/parlent…), `prTok` převádí číslice. Bez
+rozpoznávání (nepodporováno / vypnuto v Nastavení `state.speechRec`) zbývá
+nahrát → poslechnout → sebehodnocení ✓/✗. Stav otázky `state.pr` (jen
+v paměti), `pronReset()` při každé nové otázce / konci / menu zastaví
+rozpoznávání i nahrávání a uvolní blob. `pr|` je vyloučené z front due/errs
+(mikrofon uprostřed jiného cvičení by obtěžoval) a režim není v Mixu.
+Nápověda poctivě říká, že zvuk zpracovává výrobce prohlížeče.
 
 ## Přehrání odpovědi (index.html)
 
