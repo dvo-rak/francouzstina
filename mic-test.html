@@ -53,12 +53,14 @@
       <button id="bListen" class="main">🎤 číst</button>
       <button id="bNext">další věta →</button>
     </div>
+    <label style="display:block;margin-top:10px;font-size:0.9rem;color:#5a6b8c"><input type="checkbox" id="cBoth" checked> zároveň nahrávat (pak si to můžeš pustit)</label>
     <div class="out" id="out"></div>
+    <div id="bothOut"></div>
   </div>
 
   <div class="card">
-    <span class="label">Nahrávání (poslech sebe sama)</span>
-    <p class="sub" style="margin:6px 0 10px">Nahraj se, pak si pusť vzor a svou nahrávku po sobě.</p>
+    <span class="label">Jen nahrávání (bez vyhodnocení)</span>
+    <p class="sub" style="margin:6px 0 10px">Pro srovnání: samotné nahrání a přehrání, nic se nepřepisuje.</p>
     <div class="row">
       <button id="bRec">⏺ nahrát</button>
     </div>
@@ -142,7 +144,7 @@ function diff(target, heard) {
 }
 
 // ── rozpoznávání ──
-let rec = null, listening = false, stopRec = () => {};
+let rec = null, listening = false, stopRec = () => {}, both = null;
 function render() { $("sent").textContent = SENTS[si]; $("out").innerHTML = ""; }
 render();
 $("bSpeak").onclick = () => speak(SENTS[si]);
@@ -201,6 +203,7 @@ $("bListen").onclick = () => {
     if (ended) return;
     ended = true; listening = false;
     clearTimeout(silence); clearTimeout(hardStop);
+    if (both && both.m.state === "recording") both.m.stop();
     $("bListen").textContent = "🎤 číst"; $("bListen").className = "main";
     const meta = " [" + ((Date.now() - t0) / 1000).toFixed(1) + " s, událostí " + nEv + ", finálních " + nFinal + ", konec: " + how + ", průběh: " + ev.join(" → ") + "]";
     if (!last || !last.txt) {
@@ -215,6 +218,26 @@ $("bListen").onclick = () => {
     addLog("věta " + (si + 1) + ": „" + last.txt + "“ shoda " + Math.round(d.score * 100) + " %, jistota " + (last.conf ? Math.round(last.conf * 100) + " %" : "?") + (last.fin ? "" : " (nefinální)") + ", výsledků " + last.nres + meta);
   }
   try { rec.start(); } catch (err) { addLog("CHYBA start: " + err.message); }
+  $("bothOut").innerHTML = "";
+  both = null;
+  if ($("cBoth").checked && hasMR && hasGUM) {
+    navigator.mediaDevices.getUserMedia({ audio: true }).then((st) => {
+      if (ended) { st.getTracks().forEach((t) => t.stop()); ev.push("nahrávání: pozdě"); return; }
+      const ch = [];
+      const m = new MediaRecorder(st);
+      both = { m, st };
+      m.ondataavailable = (e) => e.data.size && ch.push(e.data);
+      m.onstop = () => {
+        st.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(ch, { type: m.mimeType || "audio/mp4" });
+        const kb = Math.round(blob.size / 1024);
+        addLog("  + souběžná nahrávka: " + kb + " kB" + (kb < 2 ? " (PRÁZDNÁ?)" : ""));
+        $("bothOut").innerHTML = '<span class="label" style="display:block;margin-top:12px">Tvoje nahrávka</span><audio controls src="' + URL.createObjectURL(blob) + '"></audio>';
+      };
+      m.start();
+      ev.push("nahrávání: start");
+    }).catch((err) => { ev.push("nahrávání: " + err.name); addLog("CHYBA souběžné nahrávání: " + err.name); });
+  }
 };
 
 // ── nahrávání ──
