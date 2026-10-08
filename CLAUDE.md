@@ -130,7 +130,20 @@ ručičkový ciferník. `timeDistractors` dává přednost ±1 h se stejnými mi
 (to je ta past). statId `h|<kind>|<type>`, kind ∈ 00/15/30/45/po/pred;
 `questionFromStatId` z něj losuje nový konkrétní čas.
 
-## Výslovnost (index.html, režim `pron`)
+## Výslovnost (index.html, režimy `pron` = 🎤 Věty nahlas, `pront` = 🎤 Text nahlas)
+
+`pront` bere úryvky z TEXTS za běhu (`pronExcerpts()`: souvislé 2–3 věty,
+18–55 slov, bez uvozovek/závorek/zkratek), statId `px|<text>|<první věta>`
+— stabilní, dokud se nemění texty ani algoritmus řezání (texty jsou
+append-only; algoritmus NEMĚNIT, jinak se rozjedou uložené statistiky).
+Úryvky s čísly chodí v 60 %. `q.long`: správně od 90 % slov, jména (velké
+písmeno uprostřed věty) se nehodnotí (značka 3, šedě), ticho 4 s, limit 60 s.
+Čísla: obě strany jdou přes `prNormStr` + `prWordToks` (10 h → dix heures,
+2,50 € → deux euros cinquante, 1er → premier, 06 → zéro six, roky přes
+`frNumBig`), takže je jedno, jestli rozpoznávač píše číslice, nebo slova.
+Render výsledku MUSÍ tokenizovat stejně (`prTargetWords`), jinak se značky
+posunou.
+
 
 Web Speech API (`webkitSpeechRecognition`, fr-FR) + souběžně MediaRecorder
 (vlastní nahrávka k poslechu). Ověřeno na iPhonu QA (iOS 26, Safari/WebKit):
@@ -142,7 +155,7 @@ kumulativní výsledky → `joinResults` bere poslední. `rec.start()` musí bě
 synchronně v click handleru (user gesture), nahrávání se startuje až po něm.
 Hodnocení `pronEval`: LCS po slovech, správně = VŠECHNA slova (u minimálních
 párů by tolerance schovala právě tu chybu). `prKey` toleruje homofony lišící
-se jen pravopisem (a/à, parle/parlent…), `prTok` převádí číslice. Bez
+se jen pravopisem (a/à, parle/parlent…), `prWordToks` převádí čísla. Bez
 rozpoznávání (nepodporováno / vypnuto v Nastavení `state.speechRec`) zbývá
 nahrát → poslechnout → sebehodnocení ✓/✗. Stav otázky `state.pr` (jen
 v paměti), `pronReset()` při každé nové otázce / konci / menu zastaví
