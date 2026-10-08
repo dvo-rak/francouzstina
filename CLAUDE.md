@@ -101,6 +101,16 @@ vaty. Chyby přiznej rovnou. Cílové uživatelce appky se říká „QA".
     minimálních párech (vu×vous, sur×sous, ils‿ont×ils sont…). BEZ číslic
     a bez septante/nonante (rozpoznávač by napsal číslici → `prTok` umí jen
     číslice→`frNumber`, tedy francouzskou formu).
+  - `DIALOGS` — situační dialogy (režim `dial`, 💬): `{cat: "doc"|"sen", lvl,
+    title, ctx (česky), steps: [{who?, say? (replika druhé strany FR), task
+    (česky: co chce říct), o[], c (PŘESNÝ řetězec z o), why?}]}`. APPEND-ONLY
+    (statId `dl|<dialog>|<krok>`, vyřazuje se celý dialog `dl|<dialog>`).
+    Krok bez `say` = QA začíná sama. Distraktory: gramatické chyby I věcně /
+    společensky nevhodné odpovědi (tykání seniorům, strohost). QA je žena
+    (shody: fatiguée, reconnue), jako dobrovolnice se jmenuje „Anna“.
+    Lékař je PRIORITA (uživatelka má hodně zdravotních situací) — rozšiřovat
+    hlavně `cat: "doc"`. Švýcarský kontext: 144, assistante médicale, LAMal,
+    franchise/quote-part, EMS, dîner = oběd.
   - `TEXTS` — DELF čtení: `{title, level: "B1"|"B2", text, qs: [{q, o[], c, why?}]}`.
     `c` musí být PŘESNÝ řetězec z `o`. Vrai/Faux vždy v pořadí ["Vrai","Faux"]
     (appka je nemíchá). Otázky francouzsky, `why` česky u chytáků.
@@ -181,6 +191,14 @@ Opakované pokusy (🔁 zkusit znovu, `pronRetry`): `recStat` jen u PRVNÍHO
 pokusu (`pronAnswer` → `applyAnswer`), další pokusy jen přepisují razítko;
 první úspěch po chybě přičte `score.ok` (jednou, `everOk`). `prCarry()`
 přenáší `tries`/`everOk` do nového `state.pr` při startu poslechu.
+
+## Dialogy (index.html, režim `dial`)
+
+Jedno kolo = jeden scénář (jako čtení: `state.dlIdx`, `state.dlStep`,
+`pickDialog()` vážený chybovostí kroků, bez opakování posledního).
+`buildDialStep` staví otázku (`q.dial`), `renderDialCard()` nad ní kreslí
+kontext + dosavadní rozhovor (repliky + správné odpovědi „Ty:“). Témata
+`state.dialCats` v sheetu. `dl|` je vyloučené z front due/errs a z Mixu.
 
 ## Přehrání odpovědi (index.html)
 

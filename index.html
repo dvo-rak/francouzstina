@@ -337,6 +337,12 @@
   .field { margin-top: 14px; }
   .setRow + .setRow { margin-top: 16px; }
 
+  .dlCard { padding: 16px 18px; }
+  .dlCtx { color: #5a6b8c; font-size: 0.92rem; margin: 6px 0 4px; font-style: italic; }
+  .dlLine { margin-top: 8px; line-height: 1.45; font-size: 0.98rem; }
+  .dlLine .dlWho { color: #8391ad; font-size: 0.82rem; font-weight: 600; }
+  .dlLine.me { color: #2e7d4f; padding-left: 14px; }
+  .qBig.sentence.task { font-size: 1.05rem; font-weight: 600; color: #1c2a4a; }
   .prRow { display: flex; gap: 10px; margin-top: 14px; }
   .prRow > button { flex: 1; text-align: center; }
   .primary.prRec { background: #b8302f; }
@@ -361,7 +367,7 @@
 <script>
 "use strict";
 
-const APP_VERSION = "37 (2026-10-08)";
+const APP_VERSION = "38 (2026-10-08)";
 
 // ── Skládání tvarů ──────────────────────────────────────────
 const PRONOUNS = ["je", "tu", "il", "nous", "vous", "ils"];
@@ -492,7 +498,7 @@ const MODE_LABEL = {
   sent: "PC × Imparfait", num: "Čísla", gen: "Rody", cete: "Čtení",
   gram: "Gramatika", dict: "Diktát", due: "Opakování", errs: "Moje chyby",
   swiss: "Švýcarská fr.", pcaux: "PC: être × avoir", art: "Stažené členy", time: "Hodiny",
-  pron: "Věty nahlas", pront: "Text nahlas",
+  pron: "Věty nahlas", pront: "Text nahlas", dial: "Dialogy",
 };
 const GRP_LABEL = { all: "všechna", irr: "nepravidelná", reg: "pravidelná" };
 const LENGTHS = [
@@ -625,11 +631,11 @@ function idxPool(arr, prefix, extraFilter) {
 // položky k opakování / chybové (čtení t| se do front nehodí — je to celá session)
 const dueIds = () =>
   Object.entries(state.stats)
-    .filter(([id, s]) => s.due && s.due <= Date.now() && !/^(t|pr|px)\|/.test(id) && !isHidden(id))
+    .filter(([id, s]) => s.due && s.due <= Date.now() && !/^(t|pr|px|dl)\|/.test(id) && !isHidden(id))
     .map(([id]) => id);
 const errIds = () =>
   Object.entries(state.stats)
-    .filter(([id, s]) => s.b > 0 && !/^(t|pr|px)\|/.test(id) && !isHidden(id))
+    .filter(([id, s]) => s.b > 0 && !/^(t|pr|px|dl)\|/.test(id) && !isHidden(id))
     .sort((a, b) => b[1].b / (b[1].o + b[1].b) - a[1].b / (a[1].o + a[1].b))
     .slice(0, 20)
     .map(([id]) => id);
@@ -667,6 +673,7 @@ const DEFAULT_SETTINGS = {
   vocabDir: "frcz", // frcz | czfr — směr dlaždice Slovíčka
   gramTopics: [], // vybraná témata Gramatiky; prázdné = vše
   vocabThemes: [], // vybraná témata Slovíček (při zdroji „témata“); prázdné = vše
+  dialCats: ["doc", "sen"], // témata Dialogů
   speechRec: true, // 🎤 rozpoznávání řeči ve Výslovnosti (vypnuto = jen nahrávání + sebehodnocení)
 };
 const state = {
@@ -690,6 +697,7 @@ const state = {
   cteIdx: 0,     // čtení: index aktuálního textu
   cteQ: 0,       // čtení: index otázky v textu
   lastText: null,
+  dlIdx: 0, dlStep: 0, lastDialog: null, // dialogy: scénář a krok
 };
 // migrace: dřív jeden styl čísel (numStyle), teď výběr (numStyles)
 {
@@ -712,7 +720,7 @@ function saveSettings() {
     sessionLen: state.sessionLen, ans: state.ans, smart: state.smart, sound: state.sound,
     goal: state.goal, vocabSrc: state.vocabSrc, numStyles: state.numStyles, numTopics: state.numTopics,
     houseHl: state.houseHl, vocabDir: state.vocabDir, gramTopics: state.gramTopics,
-    vocabThemes: state.vocabThemes, speechRec: state.speechRec,
+    vocabThemes: state.vocabThemes, speechRec: state.speechRec, dialCats: state.dialCats,
   });
 }
 
@@ -1508,6 +1516,8 @@ function makeQuestion() {
     }
     return null;
   }
+  // dialog: jeden scénář krok po kroku (jako čtení: jeden text = jedno kolo)
+  if (state.mode === "dial") return buildDialStep(state.dlIdx, state.dlStep);
 
   const pool = getPool();
   const prevKey = state.q && state.q.key;
@@ -1691,6 +1701,50 @@ function pickText() {
   return sampleWeighted(cands, (i) => "t|" + i);
 }
 
+// ── Dialogy (💬) ──────────────────────────────────────────────────
+// statId dl|<dialog>|<krok>; vyřadit jde celý dialog (dl|<dialog>).
+// Do front due/errs nejdou (krok bez kontextu rozhovoru nedává smysl).
+const DIAL_CATS = [{ id: "doc", label: "🩺 U lékaře" }, { id: "sen", label: "👵 Senioři" }];
+const dialOk = (i) => state.dialCats.includes(DIALOGS[i].cat) && lvlOk(DIALOGS[i].lvl, "B1");
+function pickDialog() {
+  let idxs = DIALOGS.map((_, i) => i).filter((i) => dialOk(i) && !isHidden("dl|" + i));
+  if (!idxs.length) idxs = DIALOGS.map((_, i) => i).filter(dialOk);
+  if (!idxs.length) idxs = DIALOGS.map((_, i) => i);
+  if (idxs.length > 1 && state.lastDialog != null) idxs = idxs.filter((i) => i !== state.lastDialog);
+  // váha: průměrná chybovost kroků (neviděné mírně preferované, viz errWeight)
+  const w = (i) => DIALOGS[i].steps.reduce((a, _, j) => a + errWeight("dl|" + i + "|" + j), 0) / DIALOGS[i].steps.length;
+  if (!state.smart) return pick(idxs);
+  const tot = idxs.reduce((a, i) => a + w(i), 0);
+  let r = Math.random() * tot;
+  for (const i of idxs) { r -= w(i); if (r <= 0) return i; }
+  return idxs[idxs.length - 1];
+}
+function buildDialStep(di, si) {
+  const st = DIALOGS[di].steps[si];
+  return {
+    key: "dl|" + di + "|" + si, statId: "dl|" + di + "|" + si,
+    prompt: "Tvůj úkol", big: st.task, bigClass: "sentence task", sub: "",
+    correct: st.c, answerType: "choice", options: shuffle([...st.o]),
+    why: st.why || null, say: st.c,
+    audio: state.sound && st.say ? st.say : null, dial: true,
+  };
+}
+function renderDialCard() {
+  const D = DIALOGS[state.dlIdx];
+  const line = (who, txt, me, btn) => '<div class="dlLine' + (me ? " me" : "") + '"><span class="dlWho">' + esc(who) + "</span> " + esc(txt) +
+    (btn && TTS_OK ? ' <button class="histClear" data-action="say-line" data-id="' + esc(txt) + '" aria-label="Přehrát">🔊</button>' : "") + "</div>";
+  let h = '<div class="card dlCard"><div class="labelRow"><span class="label">' + esc(D.title) + " · " + esc(D.lvl) + "</span></div>" +
+    '<p class="dlCtx">' + esc(D.ctx) + "</p>";
+  D.steps.slice(0, state.dlStep).forEach((st) => {
+    if (st.say) h += line(st.who, st.say, false, true);
+    h += line("Ty:", st.c, true, false);
+  });
+  const cur = D.steps[state.dlStep];
+  if (cur.say) h += line(cur.who, cur.say, false, true);
+  if (state.picked !== null) h += line("Ty:", cur.c, true, false);
+  return h + "</div>";
+}
+
 // věrohodné číselné distraktory (prohozené desítky/jednotky, ±1, ±10…)
 function numDistractor(n) {
   const cand = [];
@@ -1718,6 +1772,11 @@ function start(mode) {
   if (mode === "errs") {
     state.queue = shuffle(errIds());
     state.qi = 0;
+  }
+  if (mode === "dial") {
+    state.dlIdx = pickDialog();
+    state.lastDialog = state.dlIdx;
+    state.dlStep = 0;
   }
   if (mode === "cete") {
     state.cteIdx = pickText();
@@ -2093,7 +2152,13 @@ function next() {
     if (state.q.audio) speak(state.q.audio);
     return;
   }
-  if (state.mode === "cete") {
+  if (state.mode === "dial") {
+    if (state.dlStep >= DIALOGS[state.dlIdx].steps.length - 1) {
+      finish();
+      return;
+    }
+    state.dlStep++;
+  } else if (state.mode === "cete") {
     if (state.cteQ >= TEXTS[state.cteIdx].qs.length - 1) {
       finish();
       return;
@@ -2192,6 +2257,7 @@ function renderMenu() {
     tile("vocab", "Slovíčka", state.vocabDir === "czfr" ? "CZ → FR" : "FR → CZ", true) +
     tile("num", "Čísla", state.numTopics.length > 1 || state.numTopics[0] !== "base" ? "ceny, data, hodiny…" : numWord(72), true) +
     tile("swiss", "🇨🇭 Romandie", "natel, cornet"));
+  html += group("Situace", tile("dial", "💬 Dialogy", "u lékaře, se seniory", true));
   html += group("Poslech a čtení",
     (TTS_OK ? tile("dict", "Diktát", "🔊 dictée") : "") +
     (SR_OK || REC_OK ? tile("pron", "🎤 Věty nahlas", "sous × sur") + tile("pront", "🎤 Text nahlas", "à 19 h 30") : "") +
@@ -2239,6 +2305,12 @@ function renderSheet() {
       (state.vocabSrc === "themes" ? field("Témata", chipRow([{ id: "*", label: "Všechna" }].concat(vocabThemesAtLevel().map(([t, n]) => ({ id: t, label: t + " · " + n }))),
         (t) => (t.id === "*" ? !state.vocabThemes.length : state.vocabThemes.includes(t.id)), "vocab-theme")) : "") +
       go(state.vocabDir);
+  }
+  if (state.sheet === "dial") {
+    const cnt = (c) => DIALOGS.filter((d) => d.cat === c && lvlOk(d.lvl, "B1")).length;
+    return head("Dialogy", "situace krok po kroku — vybíráš, co řekneš") +
+      field("Témata", chipRow(DIAL_CATS.map((c) => ({ id: c.id, label: c.label + " · " + cnt(c.id) })), (c) => state.dialCats.includes(c.id), "dial-cat")) +
+      go("dial");
   }
   if (state.sheet === "num") {
     return head("Čísla", "vyber, co chceš procvičovat") +
@@ -2309,6 +2381,8 @@ function renderQuiz() {
     progress = Math.min(state.qi + 1, state.queue.length) + " / " + state.queue.length + " · ";
   } else if (isCete) {
     progress = Math.min(state.cteQ + 1, TEXTS[state.cteIdx].qs.length) + " / " + TEXTS[state.cteIdx].qs.length + " · ";
+  } else if (state.mode === "dial") {
+    progress = (state.dlStep + 1) + " / " + DIALOGS[state.dlIdx].steps.length + " · ";
   } else if (state.sessionLen > 0) {
     const cur = Math.min(s.total + (state.picked === null ? 1 : 0), state.sessionLen);
     progress = cur + " / " + state.sessionLen + " · ";
@@ -2329,12 +2403,14 @@ function renderQuiz() {
       '<p class="readText">' + esc(T.text) + "</p></div>";
   }
 
+  if (q.dial) html += renderDialCard();
+
   html += '<div class="card">' +
     '<p class="qPrompt">' + esc(q.prompt) + "</p>" +
     '<p class="qBig' + (q.bigClass ? " " + q.bigClass : "") + '">' + esc(q.big) + "</p>" +
     (q.sub ? '<p class="qSub">' + esc(q.sub) + "</p>" : "");
 
-  if (q.audio) {
+  if (q.audio && !q.dial) {
     html += '<button class="speakBtn" data-action="replay" aria-label="Přehrát znovu">🔊</button>';
   }
 
@@ -2424,6 +2500,8 @@ function renderQuiz() {
     }
     const last = state.mode === "cete"
       ? state.cteQ >= TEXTS[state.cteIdx].qs.length - 1
+      : state.mode === "dial"
+        ? state.dlStep >= DIALOGS[state.dlIdx].steps.length - 1
       : state.mode === "due" || state.mode === "errs"
         ? state.qi >= state.queue.length - 1
         : state.sessionLen > 0 && s.total >= state.sessionLen;
@@ -2442,8 +2520,11 @@ function renderDone() {
     '<div class="doneStamp">' + grade + "</div>" +
     '<div class="doneScore">' + s.ok + " / " + s.total + "</div>" +
     '<div class="donePct">' + pct + " % správně</div>" +
-    '<div class="doneMeta">' + MODE_LABEL[state.mode] + "</div>" +
+    '<div class="doneMeta">' + MODE_LABEL[state.mode] + (state.mode === "dial" ? " · " + esc(DIALOGS[state.dlIdx].title) : "") + "</div>" +
     '<button class="nextBtn" data-action="encore">Encore ! (ještě jednou)</button>' +
+    (state.mode === "dial" && !isHidden("dl|" + state.dlIdx)
+      ? '<button class="modeBtn doneMenuBtn" data-action="hide-item" data-id="dl|' + state.dlIdx + '">🚫 Tenhle dialog už nedávat</button>'
+      : "") +
     (state.mode === "cete" && !isHidden("t|" + state.cteIdx)
       ? '<button class="modeBtn doneMenuBtn" data-action="hide-item" data-id="t|' + state.cteIdx + '">🚫 Tenhle text už nedávat</button>'
       : "") +
@@ -2530,6 +2611,15 @@ function renderStats() {
     statRows(Object.entries(aggStats("gr|")), (k) => esc((GRAMMAR[Number(k)] || {}).s || "položka " + k), 8, (k) => "gr|" + k) + "</div>";
   html += '<div class="card"><span class="label">Diktáty</span>' +
     statRows(Object.entries(aggStats("d|")), (k) => esc((DICT[Number(k)] || {}).s || "věta " + k), 5, (k) => "d|" + k) + "</div>";
+  {
+    const per = {};
+    for (const [k, v] of Object.entries(aggStats("dl|"))) {
+      const di = k.split("|")[0];
+      per[di] = { o: (per[di]?.o || 0) + v.o, b: (per[di]?.b || 0) + v.b };
+    }
+    html += '<div class="card"><span class="label">Dialogy</span>' +
+      statRows(Object.entries(per), (k) => esc((DIALOGS[Number(k)] || {}).title || "dialog " + k), 8, (k) => "dl|" + k + "|") + "</div>";
+  }
   html += '<div class="card"><span class="label">Výslovnost</span>' +
     statRows(Object.entries(aggStats("pr|")), (k) => esc((PRON[Number(k)] || {}).s || "věta " + k), 5, (k) => "pr|" + k) + "</div>";
   html += '<div class="card"><span class="label">Text nahlas</span>' +
@@ -2549,6 +2639,7 @@ function renderStats() {
       if (p[0] === "sw") return (SWISS[i] || {}).ch || id;
       if (p[0] === "pa") return (PCAUX[i] || {}).s || id;
       if (p[0] === "pr") return (PRON[i] || {}).s || id;
+      if (p[0] === "dl") return "Dialog: " + ((DIALOGS[i] || {}).title || id);
       if (p[0] === "px") return pxLabel(p[1] + "|" + p[2]);
       return id;
     };
@@ -2572,7 +2663,7 @@ function exportData() {
       sessionLen: state.sessionLen, ans: state.ans, smart: state.smart,
       sound: state.sound, goal: state.goal, vocabSrc: state.vocabSrc,
       numStyles: state.numStyles, numTopics: state.numTopics, houseHl: state.houseHl, vocabDir: state.vocabDir, gramTopics: state.gramTopics,
-      vocabThemes: state.vocabThemes, speechRec: state.speechRec,
+      vocabThemes: state.vocabThemes, speechRec: state.speechRec, dialCats: state.dialCats,
     },
   };
   const blob = new Blob([JSON.stringify(payload, null, 1)], { type: "application/json" });
@@ -2628,6 +2719,7 @@ function renderHelp() {
     '<p><b>🔁 Moje chyby</b> — rychlé kolo jen z položek, kde se v poslední době chybovalo.</p>' +
     '<p><b>Gramatika</b> — doplňování do vět podle témat tvé úrovně: členy, předložky, zápor, zájmena (COD/COI, y/en), srovnávání, vztažná zájmena, podmínky, subjonctif… Po odpovědi krátké vysvětlení. Ve volbách si vybereš jedno nebo víc témat (u každého je počet vět na tvé úrovni), nebo „Vše“. Výběr platí jen tady, v Mixu chodí všechna témata.</p>' +
     '<p><b>Stažené členy (articles contractés)</b> — téma Gramatiky (ve volbách vyber jen „Stažené členy“) na splývání předložek <i>à</i> a <i>de</i> s určitým členem: <i>à + le → au</i>, <i>à + les → aux</i>, <i>de + le → du</i>, <i>de + les → des</i>. Před ženským rodem a samohláskou se nestahuje (<i>à la gare</i>, <i>à l\'école</i>, <i>de l\'eau</i>). Obsahuje i vazby se slovesy (<i>jouer au foot</i> × <i>jouer du piano</i>, <i>avoir mal aux dents</i>), země (<i>au Portugal</i>, <i>aux États-Unis</i>) a na B1 rozlišení, kdy je <i>du</i> stažení a kdy dělivý člen.</p>' +
+    '<p><b>💬 Dialogy</b> — situace krok po kroku: u lékaře (objednání, popis potíží, lékárna, pohotovost, pojištění…) a s klienty jako dobrovolnice v domově pro seniory. Nahoře je česky popsaná situace a dosavadní průběh rozhovoru, druhá strana řekne svou repliku (🔊 ji přehraje) a ty máš česky zadané, co chceš říct — vybereš, jak to správně řekneš francouzsky. Špatné možnosti nejsou jen gramaticky chybné, ale i nevhodné (tykání starší paní, příliš strohé, věcně mimo). Po odpovědi je krátké vysvětlení. Jedno kolo = jeden rozhovor; ve volbách si vybereš témata a dialog, který už umíš, jde na konci vyřadit.</p>' +
     '<p><b>Diktát (dictée)</b> — přehraje se celá věta francouzsky (klidně opakovaně), ty ji napíšeš. Vyhodnocení po slovech: zeleně správně, oranžově jen chybějící akcent, červeně chyba.</p>' +
     '<p><b>Časování</b> — sloveso, osoba a čas; vybereš (nebo napíšeš) správný tvar. Ve volbách si vybereš časy a skupinu sloves (všechna / nepravidelná / pravidelná — platí i pro slovesa ve slovíčkách).</p>' +
     '<p><b>Passé composé: être × avoir</b> — doplňuješ celý tvar do věty a vybíráš ze čtyř možností, které se liší právě pomocným slovesem a shodou (<i>est allée</i> × <i>a allé</i> × <i>est allé</i>…). V jednom kole se střídají slovesa z „domečku“ (🏠 pohyb a změna stavu → <i>être</i> + shoda s podmětem: <i>elle est allée</i>, <i>ils sont venus</i>) se slovesy mimo domeček (→ <i>avoir</i>, příčestí se nemění: <i>j\'ai fait le ménage</i>), takže je ten rozdíl vidět vedle sebe. Po odpovědi se ukáže, do které skupiny sloveso patří.</p>' +
@@ -2684,6 +2776,13 @@ app.addEventListener("click", (e) => {
   else if (action === "len") { state.sessionLen = Number(id); saveSettings(); render(); }
   else if (action === "goal") { state.goal = Number(id); saveSettings(); render(); }
   else if (action === "vocab-src") { state.vocabSrc = id; saveSettings(); render(); }
+  else if (action === "dial-cat") {
+    const cur = state.dialCats;
+    if (cur.includes(id)) { if (cur.length > 1) state.dialCats = cur.filter((x) => x !== id); }
+    else state.dialCats = [...cur, id];
+    saveSettings(); render();
+  }
+  else if (action === "say-line") speak(id);
   else if (action === "num-style" || action === "num-topic") {
     const key = action === "num-style" ? "numStyles" : "numTopics";
     const cur = state[key];
