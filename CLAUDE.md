@@ -125,6 +125,16 @@ ručičkový ciferník. `timeDistractors` dává přednost ±1 h se stejnými mi
 (to je ta past). statId `h|<kind>|<type>`, kind ∈ 00/15/30/45/po/pred;
 `questionFromStatId` z něj losuje nový konkrétní čas.
 
+## Přehrání odpovědi (index.html)
+
+Každý builder otázky (i inline otázka čtení) MUSÍ nastavit `say` =
+francouzský text pro tlačítko „🔊 přehrát“ u razítka po odpovědi.
+Počítá se vždy, nezávisle na `state.sound`; tlačítko se ukáže, když je
+`TTS_OK`. U vět je to celá věta s doplněnou odpovědí (u gramatiky bez
+nápovědy v závorce), u FR→ČJ francouzské slovo (odpověď je česky).
+`sayAfter` (automatické přečtení, jen se zapnutým 🔊) je samostatné
+a zůstává beze změny.
+
 ## Elize u „je“ (index.html)
 
 V psacím režimu vrací `typePrefix(tense, i, bare)` objekt

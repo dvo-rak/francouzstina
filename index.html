@@ -144,6 +144,13 @@
   }
   .speakBtn:hover { border-color: #17356e; }
 
+  .stampRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .sayBtn {
+    background: #fff; border: 1.5px solid #b9c6de; border-radius: 999px;
+    font-family: inherit; font-size: 0.9rem; color: #17356e;
+    padding: 6px 14px; margin-top: 14px; cursor: pointer;
+  }
+  .sayBtn:hover { border-color: #17356e; }
   .stamp {
     font-family: 'Caveat', cursive;
     font-size: 1.9rem;
@@ -342,7 +349,7 @@
 <script>
 "use strict";
 
-const APP_VERSION = "29 (2026-10-02)";
+const APP_VERSION = "30 (2026-10-08)";
 
 // ── Skládání tvarů ──────────────────────────────────────────
 const PRONOUNS = ["je", "tu", "il", "nous", "vous", "ils"];
@@ -712,7 +719,8 @@ function vocabItems() {
 
 // ── Generování otázek ───────────────────────────────────────
 // q: { key, statId, prompt, big, sub, correct, options?, accepted?,
-//      answerType: "choice"|"text", dict?, prefix?, inputMode?, audio?, why?, sayAfter? }
+//      answerType: "choice"|"text", dict?, prefix?, inputMode?, audio?, why?, sayAfter?,
+//      say: francouzský text pro tlačítko 🔊 po odpovědi — počítá se VŽDY }
 
 // stavitelé jednotlivých typů (sdílené režimy i frontou due/errs)
 function buildConj(verb, tense, i) {
@@ -724,6 +732,7 @@ function buildConj(verb, tense, i) {
     sub: verb.cz + " · " + TENSE_LABEL[tense],
     big: (tense === "subj" ? (i === 2 || i === 5 ? "qu'" : "que ") + PRONOUNS[i] : PRONOUNS[i]) + " … ?",
     correct,
+    say: correct,
   };
   if (state.ans === "text") {
     q.answerType = "text";
@@ -760,12 +769,14 @@ function buildVocab(item, dir, items) {
       answerType: "choice",
       options: shuffle([item.cz, ...others.map((x) => x.cz)]),
       audio: state.sound ? item.fr : null,
+      say: item.fr,
     };
   }
   const q = {
     key: "czfr|" + item.fr, statId: "v|" + item.fr,
     prompt: "Jak se řekne…",
     big: item.cz, correct: item.fr,
+    say: item.fr,
     sayAfter: state.sound ? item.fr : null,
   };
   if (state.ans === "text") {
@@ -794,6 +805,7 @@ function buildNum(n) {
     prompt: "Jak se řekne francouzsky…",
     big: String(n), sub: state.numStyle === "ch" ? "švýcarská varianta" : "",
     correct: word,
+    say: word,
     sayAfter: state.sound ? word : null,
   };
   if (state.ans === "text") { q.answerType = "text"; q.accepted = numAccepted(n); }
@@ -805,7 +817,7 @@ function buildNumListen(n) {
   const q = {
     key: "numL|" + n, statId: "n|" + Math.floor(n / 10) * 10,
     prompt: "Poslouchej a napiš číslo",
-    big: "🔊", audio: numWord(n), sub: "klikni na 🔊 pro přehrání",
+    big: "🔊", audio: numWord(n), say: numWord(n), sub: "klikni na 🔊 pro přehrání",
     correct: String(n),
   };
   if (state.ans === "text") { q.answerType = "text"; q.accepted = [String(n)]; q.inputMode = "numeric"; }
@@ -899,6 +911,7 @@ function buildTime(h, m, type) {
       sub: listen ? "klikni na 🔊 pro přehrání" : "",
       correct: fmtClock(h, m),
       audio: listen ? word : null,
+      say: word,
       sayAfter: !listen && state.sound ? word : null,
     };
     if (state.ans === "text") {
@@ -920,6 +933,7 @@ function buildTime(h, m, type) {
     bigClass: type === "cz" ? "sentence" : "",
     sub: type === "cz" ? "= " + fmtClock(h % 12 || 12, m) : "",
     correct,
+    say: correct,
     sayAfter: state.sound ? correct : null,
   };
   if (state.ans === "text") {
@@ -1055,6 +1069,7 @@ function buildPcaux(pi) {
     answerType: "choice",
     options: shuffle(opts),
     why: item.why || houseNote,
+    say: item.s.replace("___", correct),
     sayAfter: state.sound ? item.s.replace("___", correct) : null,
   };
 }
@@ -1090,6 +1105,7 @@ function buildSwiss(si) {
       answerType: "choice",
       options: shuffle([s.fr, ...pickDistractors(s.fr)]),
       why: s.note || null,
+      say: s.fr,
       sayAfter: state.sound ? s.ch : null,
     };
   }
@@ -1102,6 +1118,7 @@ function buildSwiss(si) {
     answerType: "choice",
     options: shuffle([s.ch, ...pickDistractors(s.ch)]),
     why: s.note || null,
+    say: s.ch,
     sayAfter: state.sound ? s.ch : null,
   };
 }
@@ -1114,6 +1131,7 @@ function buildGen(noun) {
     correct: noun.g === "m" ? "un" : "une",
     answerType: "choice",
     options: ["un", "une"],
+    say: (noun.g === "m" ? "un " : "une ") + noun.n,
     sayAfter: state.sound ? (noun.g === "m" ? "un " : "une ") + noun.n : null,
   };
 }
@@ -1132,6 +1150,7 @@ function buildSent(si) {
     answerType: "choice",
     options: shuffle([impF, pcF]),
     why: sn.why,
+    say: sn.s.replace("___", sn.t === "imp" ? impF : pcF),
     sayAfter: state.sound ? sn.s.replace("___", sn.t === "imp" ? impF : pcF) : null,
   };
 }
@@ -1147,6 +1166,7 @@ function buildGram(gi) {
     answerType: "choice",
     options: shuffle([...g.o]),
     why: g.why || null,
+    say: g.s.replace("___", g.c).replace(/\s*\([^)]*\)/g, ""),
     sayAfter: state.sound ? g.s.replace("___", g.c) : null,
   };
 }
@@ -1156,7 +1176,7 @@ function buildDict(di) {
   return {
     key: "d|" + di, statId: "d|" + di,
     prompt: "Diktát",
-    big: "🔊", audio: d.s,
+    big: "🔊", audio: d.s, say: d.s,
     sub: "poslouchej (🔊 přehraje znovu) a napiš celou větu",
     correct: d.s,
     answerType: "text", dict: true,
@@ -1338,6 +1358,7 @@ function makeQuestion() {
         big: qd.q, bigClass: "sentence",
         sub: "",
         correct: qd.c,
+        say: qd.c,
         answerType: "choice",
         options: vf ? [...qd.o] : shuffle([...qd.o]),
         why: qd.why || null,
@@ -1776,7 +1797,9 @@ function renderQuiz() {
       : q.dict
         ? dictEval(state.picked, q.correct).ok
         : matchTyped(state.picked, q.accepted) > 0;
-    html += '<div class="stamp ' + (ok ? "ok" : "ko") + '">' + esc(state.stamp) + "</div>";
+    html += '<div class="stampRow"><div class="stamp ' + (ok ? "ok" : "ko") + '">' + esc(state.stamp) + "</div>" +
+      (TTS_OK && q.say ? '<button class="sayBtn" data-action="say-answer" aria-label="Přehrát správnou odpověď">🔊 přehrát</button>' : "") +
+      "</div>";
     if (state.accentWarn) {
       html += '<p class="accentNote">Pozor na akcenty' + (q.dict ? "" : ": " + esc(q.correct)) + "</p>";
     } else if (!ok && !q.dict) {
@@ -1987,7 +2010,7 @@ function renderHelp() {
     '<p><b>Denní cíl a série 🔥</b> — kolik otázek denně chceš stihnout. Nahoře v menu vidíš dnešní počet, sérii dní se splněným cílem a mřížku posledních 28 dní (modrá = něco, zelená = cíl splněn).</p>' +
     '<p><b>✍ psaní odpovědí</b> — místo výběru ze 4 možností odpověď píšeš. Těžší, ale blíž zkoušce. Kontrola je tolerantní: chybějící háčky a čárky (<i>etais</i> místo <i>étais</i>) se počítají jako správně, jen s upozorněním „pozor na akcenty“; u čísel je jedno, jestli píšeš pomlčky, nebo mezery. U časování stačí napsat samotný tvar (<i>ai répondu</i>), ale uzná se i celý tvar se zájmenem (<i>j\'ai répondu</i>).</p>' +
     '<p><b>🧠 chytré opakování</b> — appka si (jen v tomhle prohlížeči) počítá, kde děláš chyby, a tyhle věci ti pak nabízí <b>častěji</b>. Nic víc v tom není — žádné plánování na dny dopředu, prostě „co ti nejde, chodí častěji“. Vypnuté = čistě náhodný výběr.</p>' +
-    '<p><b>🔊 zvuk</b> — francouzské předčítání hlasem prohlížeče: slovíčka, čísla (i poslechové otázky), po odpovědi věty a <i>un/une + slovo</i>, u textů tlačítko „přečíst“. Pokud slyšíš angličtinu, chybí v zařízení francouzský hlas — na iPhonu: Nastavení → Zpřístupnění → Předčítání obsahu → Hlasy → Francouzština; na Androidu: nastavení Google TTS; na Windows: Nastavení → Čas a jazyk → Řeč → Přidat hlasy → Français, a pak restartovat prohlížeč.</p>' +
+    '<p><b>🔊 zvuk</b> — francouzské předčítání hlasem prohlížeče: slovíčka, čísla (i poslechové otázky), po odpovědi věty a <i>un/une + slovo</i>, u textů tlačítko „přečíst“. Po každé odpovědi je navíc tlačítko <b>🔊 přehrát</b>, které správnou odpověď přečte francouzsky (u vět celou větu s doplněnou odpovědí, u překladu do češtiny francouzské slovo) — funguje i s vypnutým automatickým zvukem. Pokud slyšíš angličtinu, chybí v zařízení francouzský hlas — na iPhonu: Nastavení → Zpřístupnění → Předčítání obsahu → Hlasy → Francouzština; na Androidu: nastavení Google TTS; na Windows: Nastavení → Čas a jazyk → Řeč → Přidat hlasy → Français, a pak restartovat prohlížeč.</p>' +
     '</div>' +
 
     '<div class="card helpCard"><span class="label">📊 Statistiky a „✓ umím“</span>' +
@@ -2054,6 +2077,7 @@ app.addEventListener("click", (e) => {
   else if (action === "answer") answerChoice(state.q.options[Number(id)]);
   else if (action === "submit-typed") answerTyped(document.getElementById("typeInput").value);
   else if (action === "replay") speak(state.q.audio);
+  else if (action === "say-answer") speak(state.q.say);
   else if (action === "next") next();
   else if (action === "finish") finish();
   else if (action === "encore") start(state.mode);
