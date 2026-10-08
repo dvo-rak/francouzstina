@@ -100,6 +100,12 @@ vaty. Chyby přiznej rovnou. Cílové uživatelce appky se říká „QA".
     `c` musí být PŘESNÝ řetězec z `o`. Vrai/Faux vždy v pořadí ["Vrai","Faux"]
     (appka je nemíchá). Otázky francouzsky, `why` česky u chytáků.
 - `deploy.sh` — nasazení s verzováním (viz Workflow).
+- `mic-test.html` — DOČASNÁ testovací stránka (mimo menu, bez data.js):
+  ověřuje Web Speech API (`webkitSpeechRecognition`, fr-FR) a MediaRecorder
+  na zařízení QA (iPhone Safari, Mac Chrome) před stavbou režimu
+  🎤 Výslovnost. Po rozhodnutí smazat. Pozn.: rozpoznávání posílá zvuk
+  výrobci prohlížeče — pokud se režim postaví, upravit v Nápovědě větu
+  „nikam se nic neposílá“.
 - `README.md` — jen úvod + sekce pro správce. Uživatelská nápověda žije
   VÝHRADNĚ v appce (`renderHelp()` v index.html) — README ji záměrně
   neduplikuje, aby nebylo co zapomenout synchronizovat.
