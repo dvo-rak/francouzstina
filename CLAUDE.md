@@ -112,11 +112,26 @@ vaty. Chyby přiznej rovnou. Cílové uživatelce appky se říká „QA".
 ## Čísla (index.html)
 
 `frNumber()` = francouzská forma, `chNumber()` = romandská
-(septante/huitante/nonante, jinak deleguje na frNumber). Přepínač
-`state.numStyle` ("fr"|"ch") vybírá přes `numWord()`; při psaní
-`numAccepted()` uznává obě formy (kvůli ženevskému quatre-vingts).
+(septante/huitante/nonante, jinak deleguje na frNumber). Uložený výběr
+stylů je `state.numStyles` (["fr"], ["ch"] nebo oba = losuje se pro KAŽDOU
+otázku přes `pickNumStyle()`); `state.numStyle` je jen styl aktuální otázky
+(neukládá se, čte ho `numWord()` a buildery). Staré nastavení `numStyle`
+se při startu i při obnově zálohy převádí na `numStyles`. Při psaní se
+uznávají obě formy (kvůli ženevskému quatre-vingts).
 
-## Hodiny (index.html, režim `time`)
+Dlaždice Čísla má sheet: témata `state.numTopics` (base = 0–100, big,
+price, date, year, phone, time = Hodiny) + styl FR/CH (určuje i měnu
+€/CHF a formát telefonu CH 0XX XXX XX XX × FR po dvojicích). Generátory
+`buildBig/buildPrice/buildDate/buildYear/buildPhone` přes společné
+`numTopicQ` (typ w = číslo → slova, l = poslech → číslice, jen se zvukem),
+statId `nb|np|nd|ny|nt` + `|<druh>|<w|l>` (druhy v `NUM_KIND_LABEL`, u
+telefonu druh = styl). `bigWords(n, st, final)` řeší pravopis: cents /
+quatre-vingts s jen na konci čísla (deux cents × deux cent un × deux cent
+mille). Distraktory: `spellTraps` (cent×cents, vingt×vingts) + číselní
+sousedé; `optionsFrom` má pojistku na 4 unikátní. Mix bere jen 0–100
+a hodiny, nová témata ne.
+
+## Hodiny (index.html, režim `time`; v menu jako téma „🕐 Hodiny“ v Číslech)
 
 Generované, žádná data. Česká past: čeština počítá k DALŠÍ hodině (půl čtvrté
 = 15:30), francouzština od předchozí (trois heures et demie). `frTimeEveryday`
@@ -195,7 +210,7 @@ možnost.
   intervaly `BOX_DAYS = [_,1,3,7,14,30]` dní. Správně → box+1, chyba → box 1.
 - Režimy `due` (📅 K zopakování) a `errs` (🔁 Moje chyby) jedou z fronty
   `state.queue` statId; otázky staví `questionFromStatId()` — pozor, musí
-  umět všechny prefixy (c|, v|, n|, g|, s|, gr|, d|, pa|, sw|, h|); `t|` (čtení) se do
+  umět všechny prefixy (c|, v|, n|, nb|, np|, nd|, ny|, nt|, g|, s|, gr|, d|, pa|, sw|, h|); `t|` (čtení) se do
   front nefiltruje. Nerozložitelná id (smazaná data) se tiše přeskakují.
 - Denní počítadlo v `fr-cahier-days` (klíč YYYY-MM-DD, prořezává se >120 dní);
   streak = po sobě jdoucí dny se splněným `goal` (dnešek se počítá až po

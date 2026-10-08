@@ -361,7 +361,7 @@
 <script>
 "use strict";
 
-const APP_VERSION = "36 (2026-10-08)";
+const APP_VERSION = "37 (2026-10-08)";
 
 // ── Skládání tvarů ──────────────────────────────────────────
 const PRONOUNS = ["je", "tu", "il", "nous", "vous", "ils"];
@@ -661,7 +661,8 @@ const DEFAULT_SETTINGS = {
   sound: false,
   goal: 20, // denní cíl (počet otázek)
   vocabSrc: "all", // all | verbs | themes
-  numStyle: "fr", // fr (Francie) | ch (Švýcarsko: septante/huitante/nonante)
+  numStyles: ["fr"], // vybrané styly čísel: fr (soixante-dix) / ch (septante…); oba = losuje se
+  numTopics: ["base"], // témata v Číslech: base big price date year phone time
   houseHl: true, // zvýraznit v domečku sloveso z aktuální otázky
   vocabDir: "frcz", // frcz | czfr — směr dlaždice Slovíčka
   gramTopics: [], // vybraná témata Gramatiky; prázdné = vše
@@ -690,6 +691,14 @@ const state = {
   cteQ: 0,       // čtení: index otázky v textu
   lastText: null,
 };
+// migrace: dřív jeden styl čísel (numStyle), teď výběr (numStyles)
+{
+  const saved = loadJSON(SETTINGS_KEY, {});
+  if (!saved.numStyles && saved.numStyle) state.numStyles = [saved.numStyle];
+  if (!Array.isArray(state.numStyles) || !state.numStyles.length) state.numStyles = ["fr"];
+  if (!Array.isArray(state.numTopics) || !state.numTopics.length) state.numTopics = ["base"];
+  state.numStyle = state.numStyles[0]; // styl AKTUÁLNÍ otázky (losuje pickNumStyle)
+}
 // uložené časy ořež na aktuální úroveň; prázdné → preset úrovně
 state.tenseIds = state.tenseIds.filter((id) => {
   const t = TENSES.find((x) => x.id === id);
@@ -701,7 +710,7 @@ function saveSettings() {
   saveJSON(SETTINGS_KEY, {
     level: state.level, tenseIds: state.tenseIds, grp: state.grp,
     sessionLen: state.sessionLen, ans: state.ans, smart: state.smart, sound: state.sound,
-    goal: state.goal, vocabSrc: state.vocabSrc, numStyle: state.numStyle,
+    goal: state.goal, vocabSrc: state.vocabSrc, numStyles: state.numStyles, numTopics: state.numTopics,
     houseHl: state.houseHl, vocabDir: state.vocabDir, gramTopics: state.gramTopics,
     vocabThemes: state.vocabThemes, speechRec: state.speechRec,
   });
@@ -838,6 +847,224 @@ function buildNumListen(n) {
   else { q.answerType = "choice"; q.options = shuffle(numOptions(n).map(String)); }
   return q;
 }
+
+// ── Čísla: témata (velká čísla, ceny, data, roky, telefon) ─────────
+// Styl FR/CH se losuje pro každou otázku z state.numStyles (pickNumStyle);
+// state.numStyle je jen „styl aktuální otázky“. Typ otázky: w = číslo →
+// francouzsky, l = poslech → číslice (jen se zapnutým zvukem).
+// statId: nb|<c|m|M>|<w|l>, np|<r|c|s>|…, nd|<1|d>|…, ny|<19|20|x>|…, nt|<fr|ch>|…
+const NUM_TOPICS = [
+  { id: "base", label: "0–100" }, { id: "big", label: "Velká čísla" },
+  { id: "price", label: "Ceny" }, { id: "date", label: "Data" },
+  { id: "year", label: "Roky" }, { id: "phone", label: "Telefon" },
+  { id: "time", label: "🕐 Hodiny" },
+];
+const NUM_KIND_LABEL = {
+  nb: { c: "stovky", m: "tisíce", M: "desetitisíce a víc" },
+  np: { r: "celé částky", c: "s centimy", s: "jen centimy" },
+  nd: { 1: "1. den v měsíci (premier)", d: "ostatní dny" },
+  ny: { 19: "1900–1999", 20: "2000–2099", x: "starší roky" },
+  nt: { fr: "francouzský formát", ch: "švýcarský formát" },
+};
+const NUM_PREFIX_LABEL = { nb: "Velká čísla", np: "Ceny", nd: "Data", ny: "Roky", nt: "Telefon" };
+const MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const pickNumStyle = () => pick(state.numStyles && state.numStyles.length ? state.numStyles : ["fr"]);
+const w2 = (n, st) => (st === "ch" ? chNumber(n) : frNumber(n));
+// 0–999 999 slovy; final = číslo končí tady (cents/vingts mají s jen na konci:
+// deux cents × deux cent mille, quatre-vingts × quatre-vingt mille)
+function bigWords(n, st, final = true) {
+  if (n <= 100) {
+    const w = w2(n, st);
+    return final ? w : w.replace(/vingts$/, "vingt");
+  }
+  if (n < 1000) {
+    const h = Math.floor(n / 100), r = n % 100;
+    return (h > 1 ? w2(h, st) + " cent" : "cent") + (r ? " " + bigWords(r, st, final) : h > 1 && final ? "s" : "");
+  }
+  const t = Math.floor(n / 1000), r = n % 1000;
+  return (t > 1 ? bigWords(t, st, false) + " mille" : "mille") + (r ? " " + bigWords(r, st, final) : "");
+}
+const groupDigits = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+// pravopisné pasti: cent × cents, vingt × vingts
+function spellTraps(s) {
+  return [
+    s.replace(/\bcents\b/, "cent"), s.replace(/\bcent\b(?! mille)(?=\s\S|$)/, "cents"),
+    s.replace(/vingts\b/, "vingt"), s.replace(/quatre-vingt\b(?!-)/, "quatre-vingts"),
+  ].filter((x) => x !== s);
+}
+// 4 unikátní možnosti: správná + kandidáti (pořadí = priorita) + náhodná pojistka
+function optionsFrom(correct, cands, fallback) {
+  const set = new Set([correct]);
+  for (const c of cands) { if (set.size >= 4) break; if (c && c !== correct) set.add(c); }
+  for (let g = 0; set.size < 4 && g < 60; g++) { const c = fallback(); if (c !== correct) set.add(c); }
+  return shuffle([...set]);
+}
+
+// společná kostra otázky: w = zobrazit → slova, l = poslech → zobrazení
+function numTopicQ({ statId, key, type, shown, words, wordsAlt, prompt, candNums, fmtShown, fmtWords, rand, typedShown }) {
+  const say = words;
+  if (type === "l") {
+    const q = {
+      key, statId, prompt: prompt.l, big: "🔊", audio: words, say,
+      sub: "klikni na 🔊 pro přehrání" + (state.numStyle === "ch" ? " · švýcarsky" : ""), correct: shown,
+    };
+    if (state.ans === "text") {
+      q.answerType = "text"; q.inputMode = "decimal";
+      q.accepted = typedShown || [shown, shown.replace(/\s/g, "")];
+    } else {
+      q.answerType = "choice";
+      q.options = optionsFrom(shown, candNums.map(fmtShown), () => fmtShown(rand()));
+    }
+    return q;
+  }
+  const q = {
+    key, statId, prompt: prompt.w, big: shown, bigClass: shown.length > 12 ? "sentence" : "",
+    sub: state.numStyle === "ch" ? "švýcarská varianta" : "", correct: words, say,
+    sayAfter: state.sound ? words : null,
+  };
+  if (state.ans === "text") { q.answerType = "text"; q.accepted = [words, ...(wordsAlt || [])]; }
+  else {
+    q.answerType = "choice";
+    q.options = optionsFrom(words, [...spellTraps(words), ...candNums.map(fmtWords)], () => fmtWords(rand()));
+  }
+  return q;
+}
+const numType = (t) => t || (state.sound && TTS_OK && Math.random() < 0.4 ? "l" : "w");
+
+function buildBig(kind, type) {
+  const st = state.numStyle;
+  const k = kind || pick(["c", "c", "m", "m", "M"]);
+  const rndK = (kk) => kk === "c" ? 101 + rnd(899) : kk === "m" ? 1000 + rnd(9000) : (10 + rnd(990)) * 1000 + (Math.random() < 0.5 ? 0 : rnd(1000));
+  let n = rndK(k);
+  if (k !== "M" && Math.random() < 0.4) n = Math.round(n / 100) * 100 + pick([0, 0, 80, 1]); // 200, 280, 301: pasti s/bez s
+  const t = numType(type);
+  const cand = [n + 100, n - 100, n + 10, n - 10, n + 20, n * 10, Math.floor(n / 10)].filter((x) => x > 100 && x < 1000000);
+  return numTopicQ({
+    statId: "nb|" + k + "|" + t, key: "nb|" + n + "|" + t, type: t,
+    shown: groupDigits(n), words: bigWords(n, st), wordsAlt: [bigWords(n, st === "ch" ? "fr" : "ch")],
+    prompt: { w: "Jak se řekne francouzsky…", l: "Poslouchej — jaké je to číslo?" },
+    candNums: cand, fmtShown: groupDigits, fmtWords: (x) => bigWords(x, st), rand: () => rndK(k),
+    typedShown: [groupDigits(n), String(n), groupDigits(n).replace(/ /g, ".")],
+  });
+}
+
+function priceWords(f, c, st) {
+  const cur = st === "ch" ? ["franc", "francs"] : ["euro", "euros"];
+  if (!f) return bigWords(c, st) + " centimes";
+  return (f === 1 ? "un " + cur[0] : bigWords(f, st) + " " + cur[1]) + (c ? " " + bigWords(c, st) : "");
+}
+const priceShown = (f, c, st) => st === "ch"
+  ? (c ? f + "." + pad2(c) : f + ".–") + " CHF"
+  : (c ? f + "," + pad2(c) : String(f)) + " €";
+function buildPrice(kind, type) {
+  const st = state.numStyle;
+  const k = kind || pick(["r", "c", "c", "c", "s"]);
+  const rndP = (kk) => kk === "r" ? [pick([2, 5, 8, 10, 12, 15, 20, 25, 30, 45, 50, 70, 75, 80, 90, 95, 99, 100, 120, 180, 250, 380]), 0]
+    : kk === "s" ? [0, 5 * (1 + rnd(19))] : [1 + rnd(99), 5 * (2 + rnd(18))];
+  const [f, c] = rndP(k);
+  const t = numType(type);
+  const cand = [[f + 1, c], [f - 1, c], [f, c + 10], [f, c - 10], [c, f], [f + 20, c], [f - 20, c], [f, 0]]
+    .filter(([a, b]) => a >= 0 && b >= 0 && b < 100 && a <= 999 && (a || b));
+  const enc = ([a, b]) => a * 100 + b;
+  return numTopicQ({
+    statId: "np|" + k + "|" + t, key: "np|" + f + "." + c + "|" + t, type: t,
+    shown: priceShown(f, c, st), words: priceWords(f, c, st), wordsAlt: [priceWords(f, c, st === "ch" ? "fr" : "ch")],
+    prompt: { w: "Kolik to stojí? Řekni francouzsky…", l: "Poslouchej — kolik to stojí?" },
+    candNums: cand.map(enc), fmtShown: (x) => priceShown(Math.floor(x / 100), x % 100, st),
+    fmtWords: (x) => priceWords(Math.floor(x / 100), x % 100, st), rand: () => enc(rndP(k)),
+    typedShown: [priceShown(f, c, st), priceShown(f, c, st).replace(/\s*(CHF|€)$/, ""), (c ? f + "," + pad2(c) : String(f)), (c ? f + "." + pad2(c) : String(f))],
+  });
+}
+
+const dateWords = (d, m, st) => "le " + (d === 1 ? "premier" : w2(d, st)) + " " + MONTHS[m];
+const dateShown = (d, m) => d + ". " + (m + 1) + ".";
+function buildDate(kind, type) {
+  const st = state.numStyle;
+  const k = kind || (Math.random() < 0.25 ? "1" : "d");
+  const m = rnd(12);
+  const d = k === "1" ? 1 : 2 + rnd(MONTH_DAYS[m] - 1);
+  const t = numType(type);
+  const enc = (dd, mm) => mm * 100 + dd;
+  const cand = [enc(d, (m + 1) % 12), enc(d, (m + 11) % 12), d <= 12 && m + 1 <= 31 && d - 1 !== m ? enc(m + 1, d - 1) : null,
+    enc(Math.min(d + 1, 28), m), enc(Math.max(d - 1, 1), m), enc(d + 10 <= 28 ? d + 10 : d - 10, m)].filter((x) => x !== null);
+  const q = numTopicQ({
+    statId: "nd|" + k + "|" + t, key: "nd|" + d + "." + m + "|" + t, type: t,
+    shown: dateShown(d, m), words: dateWords(d, m, st), wordsAlt: [dateWords(d, m, st === "ch" ? "fr" : "ch")],
+    prompt: { w: "Jak se řekne francouzsky datum…", l: "Poslouchej — jaké je to datum?" },
+    candNums: cand, fmtShown: (x) => dateShown(x % 100, Math.floor(x / 100)),
+    fmtWords: (x) => dateWords(x % 100, Math.floor(x / 100), st), rand: () => enc(2 + rnd(27), rnd(12)),
+    typedShown: [dateShown(d, m), dateShown(d, m).replace(/\s/g, ""), d + "." + (m + 1)],
+  });
+  // první den: past „le un mai“
+  if (d === 1 && q.answerType === "choice" && t === "w") {
+    const trap = "le un " + MONTHS[m];
+    if (!q.options.includes(trap)) q.options[q.options.findIndex((o) => o !== q.correct)] = trap;
+  }
+  return q;
+}
+
+function buildYear(kind, type) {
+  const st = state.numStyle;
+  const k = kind || pick(["19", "19", "20", "20", "x"]);
+  const rndY = (kk) => kk === "19" ? 1900 + rnd(100) : kk === "20" ? 2000 + rnd(40) : pick([1291, 1515, 1648, 1789, 1815, 1848, 1870, 1880, 1889]) + (Math.random() < 0.3 ? rnd(9) : 0);
+  const y = rndY(k);
+  const t = numType(type);
+  const sw = String(y), swp = Number(sw.slice(0, 2) + sw[3] + sw[2]);
+  const alt = y >= 1100 && y < 2000 ? [bigWords(Math.floor(y / 100), st) + " cent" + (y % 100 ? " " + bigWords(y % 100, st) : "")] : [];
+  return numTopicQ({
+    statId: "ny|" + k + "|" + t, key: "ny|" + y + "|" + t, type: t,
+    shown: sw, words: bigWords(y, st), wordsAlt: [bigWords(y, st === "ch" ? "fr" : "ch"), ...alt],
+    prompt: { w: "Jak se řekne francouzsky rok…", l: "Poslouchej — jaký je to rok?" },
+    candNums: [y + 10, y - 10, swp, y + 1, y - 1, y + 100, y - 100].filter((x) => x > 999 && x < 2100),
+    fmtShown: String, fmtWords: (x) => bigWords(x, st), rand: () => rndY(k),
+  });
+}
+
+// telefon: CH 079 123 45 67 (0XX · XXX · XX · XX), FR 06 12 34 56 78 (po dvojicích)
+function phoneGroupWords(g, st) {
+  if (g === "00") return "zéro zéro";
+  if (g === "000") return "zéro zéro zéro";
+  const n = Number(g);
+  return (g[0] === "0" ? "zéro " : "") + (n ? bigWords(n, st) : "");
+}
+function buildPhone(kind, type) {
+  const st = kind || state.numStyle;
+  state.numStyle = st;
+  const d2 = () => pad2(rnd(100));
+  const mk = () => st === "ch"
+    ? ["0" + pick(["76", "77", "78", "79", "21", "22"]), String(rnd(1000)).padStart(3, "0"), d2(), d2()]
+    : ["0" + pick(["6", "7", "1"]), d2(), d2(), d2(), d2()];
+  const gs = mk();
+  const t = numType(type);
+  const shown = gs.join(" ");
+  const words = gs.map((g) => phoneGroupWords(g, st)).join(", ");
+  // distraktory: jedna skupina ±10/±20 (pasti 60–99), prohozené číslice
+  const vary = () => {
+    const g2 = [...gs];
+    const i = 1 + rnd(g2.length - 1);
+    const n = Number(g2[i]), len = g2[i].length;
+    const delta = pick([10, -10, 20, -20, 1]);
+    const v = Math.min(Math.max(n + delta, 0), len === 3 ? 999 : 99);
+    g2[i] = Math.random() < 0.3 && len === 2 ? g2[i][1] + g2[i][0] : String(v).padStart(len, "0");
+    return g2;
+  };
+  const cands = Array.from({ length: 8 }, vary);
+  const q = numTopicQ({
+    statId: "nt|" + st + "|" + t, key: "nt|" + shown + "|" + t, type: t,
+    shown, words, wordsAlt: [],
+    prompt: { w: "Jak se řekne telefonní číslo…", l: "Poslouchej — jaké je to číslo?" },
+    candNums: cands.map((g) => g.join(" ")), fmtShown: (x) => x,
+    fmtWords: (x) => x.split(" ").map((g) => phoneGroupWords(g, st)).join(", "), rand: () => mk().join(" "),
+    typedShown: [shown, shown.replace(/\s/g, "")],
+  });
+  q.bigClass = "sentence";
+  return q;
+}
+
+// jedna otázka z vybraných témat čísel (režim num; Mix bere jen 0–100)
+const NUM_BUILDERS = { nb: buildBig, np: buildPrice, nd: buildDate, ny: buildYear, nt: buildPhone };
+const TOPIC_PREFIX = { big: "nb", price: "np", date: "nd", year: "ny", phone: "nt" };
 
 // ── Hodiny ──────────────────────────────────────────────────
 // Past pro Čechy: čeština počítá k DALŠÍ hodině (půl čtvrté = 15:30),
@@ -1248,6 +1475,12 @@ function questionFromStatId(id) {
     const n = Math.min(100, dec + rnd(10));
     return buildNum(n);
   }
+  if (NUM_BUILDERS[p[0]]) {
+    if (!NUM_KIND_LABEL[p[0]][p[1]] || !/^[wl]$/.test(p[2])) return null;
+    state.numStyle = p[0] === "nt" ? p[1] : pickNumStyle();
+    return NUM_BUILDERS[p[0]](p[1], p[2] === "l" && !(state.sound && TTS_OK) ? "w" : p[2]);
+  }
+  if (p[0] === "n") state.numStyle = pickNumStyle();
   if (p[0] === "h") {
     if (!TIME_KIND_LABEL[p[1]] || !TIME_TYPE_LABEL[p[2]]) return null;
     const t = randTime(p[1], p[2]);
@@ -1334,6 +1567,23 @@ function makeQuestion() {
     }
 
     if (mode === "num") {
+      state.numStyle = pickNumStyle();
+      const topics = state.mode === "num" && state.numTopics.length ? state.numTopics : ["base"];
+      const tp = pick(topics);
+      if (tp === "time") {
+        const tc = Array.from({ length: K }, () => randTime());
+        const tt = sampleWeighted(tc, (x) => "h|" + timeKind(x.m) + "|" + x.type);
+        const q = buildTime(tt.h, tt.m, tt.type);
+        if (q.key === prevKey) continue;
+        return q;
+      }
+      if (tp !== "base") {
+        const pre = TOPIC_PREFIX[tp];
+        const cands = Array.from({ length: K }, () => NUM_BUILDERS[pre]());
+        const q = sampleWeighted(cands, (x) => x.statId);
+        if (q.key === prevKey) continue;
+        return q;
+      }
       const cands = Array.from({ length: K }, () => rnd(101));
       const n = sampleWeighted(cands, (x) => "n|" + Math.floor(x / 10) * 10);
       const listening = state.sound && TTS_OK && Math.random() < 0.5;
@@ -1940,8 +2190,7 @@ function renderMenu() {
     tile("gen", "Rody", "un problème"));
   html += group("Slovíčka",
     tile("vocab", "Slovíčka", state.vocabDir === "czfr" ? "CZ → FR" : "FR → CZ", true) +
-    tile("num", "Čísla", numWord(72)) +
-    tile("time", "🕐 Hodiny", "půl čtvrté = 3:30") +
+    tile("num", "Čísla", state.numTopics.length > 1 || state.numTopics[0] !== "base" ? "ceny, data, hodiny…" : numWord(72), true) +
     tile("swiss", "🇨🇭 Romandie", "natel, cornet"));
   html += group("Poslech a čtení",
     (TTS_OK ? tile("dict", "Diktát", "🔊 dictée") : "") +
@@ -1991,6 +2240,15 @@ function renderSheet() {
         (t) => (t.id === "*" ? !state.vocabThemes.length : state.vocabThemes.includes(t.id)), "vocab-theme")) : "") +
       go(state.vocabDir);
   }
+  if (state.sheet === "num") {
+    return head("Čísla", "vyber, co chceš procvičovat") +
+      field("Témata", chipRow(NUM_TOPICS, (t) => state.numTopics.includes(t.id), "num-topic")) +
+      field("Styl 70–99", chipRow(
+        [{ id: "fr", label: "🇫🇷 soixante-dix, €" }, { id: "ch", label: "🇨🇭 septante, CHF" }],
+        (x) => state.numStyles.includes(x.id), "num-style")) +
+      '<p class="sheetSub" style="margin-top:8px">Oba styly = střídají se. Platí i pro měnu a formát telefonu.</p>' +
+      go("num");
+  }
   if (state.sheet === "gram") {
     const topics = gramTopicsAtLevel().map(([t, n]) => ({ id: t, label: t + " · " + n }));
     return head("Gramatika", "doplň do věty") +
@@ -2010,9 +2268,6 @@ function renderSettings() {
     row("Denní cíl", chipRow([{ id: 10, label: "10" }, { id: 20, label: "20" }, { id: 50, label: "50" }], (g) => state.goal === g.id, "goal")) +
     row("Otázek v kole", chipRow(LENGTHS, (l) => state.sessionLen === l.id, "len")) +
     row("Odpovídání", chipRow([{ id: "choice", label: "výběr" }, { id: "text", label: "✍ psaní" }], (a) => state.ans === a.id, "ans")) +
-    row("Čísla 70–99", chipRow(
-      [{ id: "fr", label: "🇫🇷 soixante-dix" }, { id: "ch", label: "🇨🇭 septante" }],
-      (s) => state.numStyle === s.id, "num-style")) +
     "</div>";
   html += '<div class="card">' +
     row("🧠 Chytré opakování", onOff("smart", "zapnuto")) +
@@ -2250,6 +2505,14 @@ function renderStats() {
     statRows(Object.entries(aggStats("v|")), (k) => esc(k), 8, (k) => "v|" + k) + "</div>";
   html += '<div class="card"><span class="label">Čísla (podle desítek)</span>' +
     statRows(Object.entries(aggStats("n|")), (k) => esc(k) + "–" + (Number(k) + 9 > 100 ? 100 : Number(k) + 9), 5, (k) => "n|" + k) + "</div>";
+  {
+    const ent = Object.keys(NUM_PREFIX_LABEL).flatMap((pre) => Object.entries(aggStats(pre + "|")).map(([k, v]) => [pre + "|" + k, v]));
+    html += '<div class="card"><span class="label">Čísla: ceny, data, roky…</span>' +
+      statRows(ent, (k) => {
+        const [pre, kd, ty] = k.split("|");
+        return esc(NUM_PREFIX_LABEL[pre] + " · " + (NUM_KIND_LABEL[pre][kd] || kd) + (ty === "l" ? " · poslech" : ""));
+      }, 8, (k) => k) + "</div>";
+  }
   html += '<div class="card"><span class="label">Hodiny</span>' +
     statRows(Object.entries(aggStats("h|")), (k) => {
       const [kd, ty] = k.split("|");
@@ -2308,7 +2571,7 @@ function exportData() {
       level: state.level, tenseIds: state.tenseIds, grp: state.grp,
       sessionLen: state.sessionLen, ans: state.ans, smart: state.smart,
       sound: state.sound, goal: state.goal, vocabSrc: state.vocabSrc,
-      numStyle: state.numStyle, houseHl: state.houseHl, vocabDir: state.vocabDir, gramTopics: state.gramTopics,
+      numStyles: state.numStyles, numTopics: state.numTopics, houseHl: state.houseHl, vocabDir: state.vocabDir, gramTopics: state.gramTopics,
       vocabThemes: state.vocabThemes, speechRec: state.speechRec,
     },
   };
@@ -2333,6 +2596,7 @@ function importData(file) {
       state.hidden = d.hidden || [];
       saveJSON(HIDDEN_KEY, state.hidden);
       Object.assign(state, d.settings || {});
+      if (d.settings && d.settings.numStyle && !d.settings.numStyles) state.numStyles = [d.settings.numStyle];
       saveJSON(HIST_KEY, state.history);
       saveJSON(STATS_KEY, state.stats);
       saveJSON(DAYS_KEY, state.days);
@@ -2373,15 +2637,15 @@ function renderHelp() {
     '<p><b>🎤 Věty nahlas</b> — přečti větu nahlas. Nejdřív si můžeš pustit 🔊 vzor, pak klepni na 🎤 číst a mluv; až dočteš, klepni na ⏹ hotovo (nebo chvíli počkej, ukončí se to samo). Telefon tvou řeč přepíše a appka obarví slova: zelená = zaznělo správně, červená = slyšel něco jiného. Za správně se počítá, jen když sedí všechna slova — věty jsou schválně postavené na zrádných dvojicích (<i>vu × vous</i>, <i>sur × sous</i>, <i>poisson × poison</i>, <i>ils‿ont × ils sont</i>) a pod větou je napsané, na co si dát pozor. Zároveň se nahráváš, takže si pak můžeš pustit vzor a sebe po sobě. Tlačítkem <b>🔁 zkusit znovu</b> čteš tu samou větu, kolikrát chceš; když to napodruhé sedí, počítá se to v kole jako správně (do statistik a plánu opakování jde jen první pokus, ať appka ví, co ti dělá potíže). Slova, která znějí stejně a liší se jen pravopisem (<i>a/à</i>, <i>parle/parlent</i>), se za chybu nepočítají. Je to kontrola <i>srozumitelnosti</i> (rozuměl by ti Francouz?), ne fonetická analýza každé hlásky. Když rozpoznávání nefunguje nebo ho v Nastavení vypneš, zůstane jen nahrávání: nahraješ se, poslechneš a sama ohodnotíš.</p>' +
     '<p><b>🎤 Text nahlas</b> — totéž, ale delší úryvek (2–3 věty) z textů na čtení, často s čísly: otvírací doby (<i>de 10 h à 19 h</i>), ceny (<i>2,50 euros</i>), data (<i>le 1er octobre</i>), telefonní čísla. Čísla čti celá, jak se říkají; je jedno, jestli je telefon pak napíše číslicemi, nebo slovy. Tady stačí 90 % slov (u dlouhého textu občas něco přeslechne i telefon) a jména (šedě) se nehodnotí, protože je telefon píše po svém.</p>' +
     '<p><b>Porozumění textu (DELF)</b> — krátký text (e-mail, inzerát, článek…) a otázky francouzsky, jako u zkoušky. Text zůstává během otázek nahoře. Nabízejí se texty do tvé úrovně včetně (na B2 tedy i A1–B1 — nižší úroveň textu neuškodí).</p>' +
-    '<p><b>Čísla 0–100</b> — číslo vybereš/napíšeš francouzsky. Se zapnutým zvukem je půlka otázek poslechová: slyšíš číslo a píšeš číslice.</p>' +
-    '<p><b>🕐 Hodiny</b> — kolik je hodin francouzsky. Pozor na hlavní past: čeština počítá k <i>další</i> hodině, francouzština od <i>předchozí</i>. <b>Půl čtvrté</b> (15:30) je <i>trois heures et demie</i>, ne <i>quatre</i>! Podobně <b>čtvrt na čtyři</b> = <i>trois heures et quart</i> (3:15) a <b>tři čtvrtě na čtyři</b> = <i>quatre heures moins le quart</i> (3:45 — tady je zase čtyřka, „čtyři bez čtvrt“). Minuty po celé se přidávají (<i>trois heures dix</i>), po půl se odečítají od další hodiny (<i>quatre heures moins dix</i> = 3:50). Ve 12 je <i>midi</i>, ve 24 <i>minuit</i> (a <i>midi et demi</i> bez e). Ráno/odpoledne/večer se rozliší <i>du matin / de l\'après-midi / du soir</i>; úředně (nádraží, rádio) se říká 24h: <i>quinze heures trente</i>. Otázky chodí trojím způsobem: česky hovorově → francouzsky, z digitálního času (15:30) → francouzsky a francouzsky (i poslechem) → digitální čas. Při psaní času stačí 15:30 nebo 15h30.</p>' +
+    '<p><b>Čísla</b> — ve volbách si vybereš témata (klidně víc najednou, pak se střídají): <b>0–100</b>; <b>velká čísla</b> (<i>deux cents</i> × <i>deux cent un</i>, <i>mille</i> bez s, <i>quatre-vingt mille</i>); <b>ceny</b> (<i>vingt-trois francs cinquante</i>, <i>quatre-vingts centimes</i>); <b>data</b> (<i>le premier mai</i> — první den je <i>premier</i>, ne <i>un</i>; ostatní normálně <i>le quatorze juillet</i>); <b>roky</b> (<i>mille neuf cent quatre-vingt-dix</i>, uzná se i <i>dix-neuf cent…</i>); <b>telefon</b> (švýcarsky <i>079 123 45 67</i> = <i>zéro septante-neuf, cent vingt-trois, quarante-cinq, soixante-sept</i>, francouzsky po dvojicích <i>06 12 34 56 78</i>) a <b>🕐 hodiny</b> (viz níže). Se zapnutým zvukem je část otázek poslechová: slyšíš a vybíráš / píšeš číslice. V Mixu jsou jen čísla 0–100 a hodiny.</p>' +
+    '<p><b>🕐 Hodiny</b> (téma v Číslech) — kolik je hodin francouzsky. Pozor na hlavní past: čeština počítá k <i>další</i> hodině, francouzština od <i>předchozí</i>. <b>Půl čtvrté</b> (15:30) je <i>trois heures et demie</i>, ne <i>quatre</i>! Podobně <b>čtvrt na čtyři</b> = <i>trois heures et quart</i> (3:15) a <b>tři čtvrtě na čtyři</b> = <i>quatre heures moins le quart</i> (3:45 — tady je zase čtyřka, „čtyři bez čtvrt“). Minuty po celé se přidávají (<i>trois heures dix</i>), po půl se odečítají od další hodiny (<i>quatre heures moins dix</i> = 3:50). Ve 12 je <i>midi</i>, ve 24 <i>minuit</i> (a <i>midi et demi</i> bez e). Ráno/odpoledne/večer se rozliší <i>du matin / de l\'après-midi / du soir</i>; úředně (nádraží, rádio) se říká 24h: <i>quinze heures trente</i>. Otázky chodí trojím způsobem: česky hovorově → francouzsky, z digitálního času (15:30) → francouzsky a francouzsky (i poslechem) → digitální čas. Při psaní času stačí 15:30 nebo 15h30.</p>' +
     '<p><b>Rody: un / une</b> — tipuješ rod podstatného jména. Vybraná jsou hlavně zrádná slova (<i>le problème, le musée, l\'eau — f!, le bonheur…</i>).</p>' +
     '<p><b>🇨🇭 Švýcarská francouzština</b> — rozdíly mezi francouzskou a švýcarskou (romandskou) francouzštinou: slovíčka (<i>natel</i>, <i>cornet</i>, <i>panosse</i>, <i>bancomat</i>), úřední a školní pojmy (<i>votation</i>, <i>maturité</i>, <i>action</i> = sleva), výrazy (<i>ça joue</i>, <i>tout de bon</i>) a hlavně <b>zrádné názvy jídel</b>: švýcarský <i>déjeuner</i> je snídaně, <i>dîner</i> je oběd a <i>souper</i> večeře — o jedno posunuté oproti Francii. Otázky chodí oběma směry a u záludností je česká poznámka.</p>' +
     '</div>' +
 
     '<div class="card helpCard"><span class="label">⚙️ Nastavení</span>' +
     '<p><b>Otázek v kole</b> — délka jednoho kola; u ∞ cvičíš, dokud nedáš „← ukončit“. U čtení je kolo vždy jeden text s otázkami.</p>' +
-    '<p><b>Čísla 70–99</b> — přepínač stylu: francouzsky (<i>soixante-dix, quatre-vingts, quatre-vingt-dix</i>) nebo švýcarsky (<i>septante, huitante, nonante</i>). Pozn.: <i>septante</i> a <i>nonante</i> se používají v celé Romandii včetně Ženevy, ale <i>huitante</i> jen ve Vaud, Valais a Fribourgu — v Ženevě se pro 80 říká <i>quatre-vingts</i>. Při psaní se proto uznají obě varianty.</p>' +
+    '<p><b>Styl čísel 🇫🇷 / 🇨🇭</b> (ve volbách Čísel) — francouzsky (<i>soixante-dix, quatre-vingts, quatre-vingt-dix</i>, ceny v €, telefon po dvojicích) nebo švýcarsky (<i>septante, huitante, nonante</i>, ceny v CHF, švýcarský formát telefonu); zapnuté oba = střídají se. Pozn.: <i>septante</i> a <i>nonante</i> se používají v celé Romandii včetně Ženevy, ale <i>huitante</i> jen ve Vaud, Valais a Fribourgu — v Ženevě se pro 80 říká <i>quatre-vingts</i>. Při psaní se proto uznají obě varianty.</p>' +
     '<p><b>Denní cíl a série 🔥</b> — kolik otázek denně chceš stihnout. Nahoře v menu vidíš dnešní počet, sérii dní se splněným cílem a mřížku posledních 28 dní (modrá = něco, zelená = cíl splněn).</p>' +
     '<p><b>✍ psaní odpovědí</b> — místo výběru ze 4 možností odpověď píšeš. Těžší, ale blíž zkoušce. Kontrola je tolerantní: chybějící háčky a čárky (<i>etais</i> místo <i>étais</i>) se počítají jako správně, jen s upozorněním „pozor na akcenty“; u čísel je jedno, jestli píšeš pomlčky, nebo mezery. U časování stačí napsat samotný tvar (<i>ai répondu</i>), ale uzná se i celý tvar se zájmenem (<i>j\'ai répondu</i>).</p>' +
     '<p><b>🧠 chytré opakování</b> — appka si (jen v tomhle prohlížeči) počítá, kde děláš chyby, a tyhle věci ti pak nabízí <b>častěji</b>. Nic víc v tom není — žádné plánování na dny dopředu, prostě „co ti nejde, chodí častěji“. Vypnuté = čistě náhodný výběr.</p>' +
@@ -2420,7 +2684,14 @@ app.addEventListener("click", (e) => {
   else if (action === "len") { state.sessionLen = Number(id); saveSettings(); render(); }
   else if (action === "goal") { state.goal = Number(id); saveSettings(); render(); }
   else if (action === "vocab-src") { state.vocabSrc = id; saveSettings(); render(); }
-  else if (action === "num-style") { state.numStyle = id; saveSettings(); render(); }
+  else if (action === "num-style" || action === "num-topic") {
+    const key = action === "num-style" ? "numStyles" : "numTopics";
+    const cur = state[key];
+    if (cur.includes(id)) { if (cur.length > 1) state[key] = cur.filter((x) => x !== id); }
+    else state[key] = [...cur, id];
+    if (key === "numStyles") state.numStyle = state.numStyles[0];
+    saveSettings(); render();
+  }
   else if (action === "level") {
     state.level = id;
     state.tenseIds = tensePreset(id);
