@@ -142,41 +142,78 @@ function diff(target, heard) {
 }
 
 // ── rozpoznávání ──
-let rec = null, listening = false;
+let rec = null, listening = false, stopRec = () => {};
 function render() { $("sent").textContent = SENTS[si]; $("out").innerHTML = ""; }
 render();
 $("bSpeak").onclick = () => speak(SENTS[si]);
 $("bNext").onclick = () => { si = (si + 1) % SENTS.length; render(); };
 if (!SR) $("bListen").disabled = true;
 $("bListen").onclick = () => {
-  if (listening) { rec && rec.stop(); return; }
+  if (listening) { stopRec("tlačítko"); return; }
   rec = new SR();
   rec.lang = "fr-FR";
   rec.interimResults = true;
   rec.maxAlternatives = 3;
-  rec.continuous = false;
+  // continuous: pauza uprostřed věty rozpoznávání neukončí; konec hlídá ticho / tlačítko
+  rec.continuous = true;
   const t0 = Date.now();
-  let final = null;
-  rec.onstart = () => { listening = true; $("bListen").textContent = "⏹ hotovo"; $("bListen").className = "rec"; $("out").innerHTML = '<span class="muted">poslouchám…</span>'; };
+  let last = null, nEv = 0, nFinal = 0, ended = false;
+  const ev = [];
+  let silence = null, hardStop = null;
+  stopRec = (why) => {
+    if (ended) return;
+    ev.push("stop:" + why);
+    clearTimeout(silence); clearTimeout(hardStop);
+    try { rec.stop(); } catch (err) {}
+    // pojistka: kdyby Safari neposlalo onend, vyhodnoť sami
+    setTimeout(() => { if (!ended) finish("bez onend"); }, 1500);
+  };
+  // iOS v continuous režimu občas posílá kumulativní výsledky (každý obsahuje předchozí) → ber poslední
+  const joinResults = (res) => {
+    const t = Array.from(res).map((x) => x[0].transcript.trim()).filter(Boolean);
+    const n = (x) => tok(x).join(" ");
+    const cumulative = t.length > 1 && t.every((x, i) => i === 0 || n(x).startsWith(n(t[i - 1])));
+    return cumulative ? t[t.length - 1] : t.join(" ");
+  };
+  rec.onstart = () => {
+    listening = true; ev.push("start");
+    $("bListen").textContent = "⏹ hotovo"; $("bListen").className = "rec";
+    $("out").innerHTML = '<span class="muted">poslouchám… (až dočteš, klepni na „hotovo“)</span>';
+    hardStop = setTimeout(() => stopRec("limit 20 s"), 20000);
+  };
   rec.onresult = (e) => {
+    nEv++;
     const r = e.results[e.results.length - 1];
-    const txt = Array.from(e.results).map((x) => x[0].transcript).join(" ");
-    if (r.isFinal) final = { txt, conf: r[0].confidence, alts: Array.from(r).map((x) => x.transcript) };
-    $("out").innerHTML = '<span class="muted">' + esc(txt) + "</span>";
+    if (r.isFinal) nFinal++;
+    last = { txt: joinResults(e.results), conf: r[0].confidence, fin: r.isFinal, nres: e.results.length };
+    $("out").innerHTML = '<span class="muted">' + esc(last.txt) + "</span>";
+    clearTimeout(silence);
+    silence = setTimeout(() => stopRec("ticho 2,5 s"), 2500);
   };
   rec.onerror = (e) => {
+    ev.push("error:" + e.error);
     addLog("CHYBA rozpoznávání: " + e.error + (e.message ? " (" + e.message + ")" : ""));
-    $("out").innerHTML = '<span class="ko">Chyba: ' + esc(e.error) + (e.error === "not-allowed" || e.error === "service-not-allowed" ? " — povol mikrofon (a na iPhonu zapni Diktování v Nastavení → Obecné → Klávesnice)" : "") + "</span>";
+    if (e.error !== "no-speech" && e.error !== "aborted")
+      $("out").innerHTML = '<span class="ko">Chyba: ' + esc(e.error) + (e.error === "not-allowed" || e.error === "service-not-allowed" ? " — povol mikrofon (a na iPhonu zapni Diktování v Nastavení → Obecné → Klávesnice)" : "") + "</span>";
   };
-  rec.onend = () => {
-    listening = false; $("bListen").textContent = "🎤 číst"; $("bListen").className = "main";
-    if (!final) { if (!$("out").querySelector(".ko")) $("out").innerHTML = '<span class="ko">Nic jsem nezachytil, zkus to znovu.</span>'; addLog("věta " + (si + 1) + ": nic nerozpoznáno"); return; }
-    const d = diff(SENTS[si], final.txt);
+  rec.onend = () => { ev.push("end"); finish("onend"); };
+  function finish(how) {
+    if (ended) return;
+    ended = true; listening = false;
+    clearTimeout(silence); clearTimeout(hardStop);
+    $("bListen").textContent = "🎤 číst"; $("bListen").className = "main";
+    const meta = " [" + ((Date.now() - t0) / 1000).toFixed(1) + " s, událostí " + nEv + ", finálních " + nFinal + ", konec: " + how + ", průběh: " + ev.join(" → ") + "]";
+    if (!last || !last.txt) {
+      if (!$("out").querySelector(".ko")) $("out").innerHTML = '<span class="ko">Nic jsem nezachytil, zkus to znovu.</span>';
+      addLog("věta " + (si + 1) + ": nic nerozpoznáno" + meta);
+      return;
+    }
+    const d = diff(SENTS[si], last.txt);
     $("out").innerHTML = d.words.map((x) => '<span class="w ' + (x.ok ? "good" : "bad") + '">' + esc(x.w) + "</span>").join(" ") +
-      '<div class="heard">slyšel jsem: „' + esc(final.txt) + "“ · shoda " + Math.round(d.score * 100) + " %" +
-      (final.conf ? " · jistota " + Math.round(final.conf * 100) + " %" : "") + "</div>";
-    addLog("věta " + (si + 1) + ": „" + final.txt + "“ shoda " + Math.round(d.score * 100) + " %, jistota " + (final.conf ? Math.round(final.conf * 100) + " %" : "?") + ", alternativ " + final.alts.length + ", " + ((Date.now() - t0) / 1000).toFixed(1) + " s");
-  };
+      '<div class="heard">slyšel jsem: „' + esc(last.txt) + "“ · shoda " + Math.round(d.score * 100) + " %" +
+      (last.conf ? " · jistota " + Math.round(last.conf * 100) + " %" : "") + "</div>";
+    addLog("věta " + (si + 1) + ": „" + last.txt + "“ shoda " + Math.round(d.score * 100) + " %, jistota " + (last.conf ? Math.round(last.conf * 100) + " %" : "?") + (last.fin ? "" : " (nefinální)") + ", výsledků " + last.nres + meta);
+  }
   try { rec.start(); } catch (err) { addLog("CHYBA start: " + err.message); }
 };
 
