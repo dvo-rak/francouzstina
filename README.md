@@ -12,6 +12,8 @@ Pokrývá úrovně **A1–B2** — přepínač úrovně řídí obsah celé appk
 
 Soukromí: všechna data (historie, statistiky, nastavení) zůstávají jen v prohlížeči (localStorage) — žádný účet, žádný server. Výjimka: rozpoznávání řeči ve Výslovnosti zpracovává výrobce prohlížeče (Apple/Google); dá se vypnout. Data jsou tím pádem vázaná na konkrétní zařízení a prohlížeč.
 
+Prohlížeče: na iPhonu Safari, na počítači Chrome / Edge / Safari. **Firefox neumí rozpoznávání řeči** (Web Speech API) — 🎤 Věty / Text nahlas tam fungují jen v náhradním režimu: nahrát se, poslechnout a ohodnotit sám/sama (nahrávání ve Firefoxu jde). Ostatní cvičení fungují všude.
+
 ## Pro správce
 
 - `index.html` — celá aplikace (vanilla JS, žádný build); obsahuje i text nápovědy (`renderHelp()`)
